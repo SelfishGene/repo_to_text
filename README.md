@@ -15,7 +15,7 @@ Repo to Text is a Python tool that converts GitHub repositories and local folder
 For local development, clone the repository and install it in editable mode:
 
 ```bash
-git clone https://github.com/yourusername/repo_to_text.git
+git clone https://github.com/SelfishGene/repo_to_text.git
 cd repo_to_text
 pip install -e .
 ```
