@@ -1,0 +1,1741 @@
+================================================================================
+repo title: ImSME-dataset
+repo link: https://github.com/SelfishGene/ImSME-dataset
+date processed: 2024-10-21
+================================================================================
+================================================================================
+repo file structure:
+====================
+    config.py
+    explore_ImSME_dataset.ipynb
+    README.md
+    create_equations_dataframe.py
+    LICENSE.txt
+    generate_ImSME_dataset.py
+    download_ImSME_dataset.py
+    create_char_images_dataset.py
+    requirements.txt
+    utils.py
+    sample_images/
+        sample_image_with_segmented_main_equation_parts.png
+        several_equations_with_description_labels.png
+        an_equation_with_segmentation_labels.png
+================================================================================
+================================================================================
+README.md:
+==========
+# ImSME - Images of Simple Math Equations Dataset
+
+ImSME is a dataset of wide images containing simple math equations with detailed annotations. 
+The annotations are both detailed textual descriptions as well as precise pixel coordinates of each equation part (at the digits/symbols, and arguments/operations hirarchies).  
+This repository contains the scripts used to generate the dataset and perform basic exploratory data analysis.  
+The dataset is hosted by kaggle and can be found at [ImSME dataset](https://www.kaggle.com/datasets/selfishgene/imsme-images-of-simple-math-equations)
+
+![](https://github.com/SelfishGene/ImSME-dataset/blob/main/sample_images/sample_image_with_segmented_main_equation_parts.png)
+
+## Dataset Description
+
+- Images of simple math equations with varied widths and a fixed height of 128 pixels.
+- Equations are of the form "{argument1} {operation} {argument2} {equal_sign} {result}".
+- Characters are rendered using random fonts, sometimes with different fonts for each character.
+- Detailed textual descriptions are provided for each equation, including information about fonts and character locations.
+- Multiple versions of the dataset are available: tiny (~250MB), small (~1GB), and medium (~4GB).
+
+## Repository Contents
+
+1. `config.py`: Configuration parameters and fixed data dictionaries.
+2. `utils.py`: Utility functions used across multiple scripts.
+3. `create_char_images_dataset.py`: Script to create the character images dataset.
+4. `create_equations_dataframe.py`: Script to create the equations dataframe.
+5. `generate_ImSME_dataset.py`: Script to generate equation images from the equations dataframe.
+6. `download_ImSME_dataset.py`: Script to download the ImSME dataset from Kaggle.
+7. `explore_ImSME_dataset.ipynb`: Jupyter notebook for basic exploratory data analysis of the dataset.
+8. `requirements.txt`: List of required Python packages.
+
+### Example of several equations with textual description labels
+![](https://github.com/SelfishGene/ImSME-dataset/blob/main/sample_images/several_equations_with_description_labels.png)
+
+## Requirements
+
+To install the required packages, run:
+
+```
+pip install -r requirements.txt
+```
+
+## Usage
+
+You have two options: download the pre-generated dataset or generate the dataset from scratch.
+
+### Option 1: Download and Explore the Pre-generated Dataset
+
+1. Download the ImSME dataset:
+   ```
+   python download_ImSME_dataset.py
+   ```
+
+   One can also download directly from kaggle on the following link: [ImSME dataset](https://www.kaggle.com/datasets/selfishgene/imsme-images-of-simple-math-equations)
+
+2. Explore the dataset:
+   A Jupyter notebook with basic loading and visualization of the dataset is provided - `explore_ImSME_dataset.ipynb`
+
+### Option 2: Generate the Dataset from Scratch
+
+1. Create the character images dataset:
+   ```
+   python create_char_images_dataset.py
+   ```
+
+2. Create the equations dataframe:
+   ```
+   python create_equations_dataframe.py
+   ```
+
+3. Generate ImSME dataset:
+   ```
+   python generate_ImSME_dataset.py
+   ```
+
+4. Explore the dataset:
+   A Jupyter notebook with basic loading and visualization of the dataset is provided - `explore_ImSME_dataset.ipynb` 
+
+## Dataset Structure
+
+- `math_equations_images_dataset_{tiny/small/medium}/`
+  - `equation_images/`: Folder containing equation images
+  - `label_images/`: Folder containing label images with pixel-precise annotations
+  - `simple_math_equation_images__*.csv`: CSV file with detailed information about each image
+
+- `simple_math_equations_dataset/`: Contains CSV files with equations in a convenient format
+- `char_images_dataset/`: Contains 10,664 black and white character images (128x128)
+- `char_images_dataset_tight/`: Similar to `char_images_dataset`, but with tighter cropping around the characters
+
+## Citation
+
+If you use this dataset in your research, please cite it as follows:
+
+```
+@dataset{ImSME_2024,
+  title={ImSME: Images of Simple Math Equations Dataset},
+  author={David Beniaguev},
+  year={2024},
+  url={https://github.com/SelfishGene/ImSME-dataset},
+  DOI={10.34740/KAGGLE/DSV/9026395},
+  publisher={GitHub},
+}
+```
+
+## License
+
+MIT License
+
+### Example of an equation with segmentation labels
+![](https://github.com/SelfishGene/ImSME-dataset/blob/main/sample_images/an_equation_with_segmentation_labels.png)
+
+================================================================================
+================================================================================
+explore_ImSME_dataset.ipynb:
+============================
+------------------------------------------------------------
+Cell index: 1
+Input Cell Type: python
+Input Text:
+-----------
+#%% Display a few samples from the dataset and their descriptions
+
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import random
+import glob
+from PIL import Image
+
+# Set the path to your dataset
+dataset_foldername = 'math_equations_images_dataset_medium'
+curr_file_path = os.path.abspath(os.path.dirname(__file__))
+# curr_file_path = r"C:\Users\david\Desktop\Code\ImSME-dataset"
+
+downloaded_from_kaggle = True
+if downloaded_from_kaggle:
+    dataset_folder = os.path.join(curr_file_path, 'data', dataset_foldername, dataset_foldername)
+else:
+    dataset_folder = os.path.join(curr_file_path, 'data', dataset_foldername)
+
+csv_file = glob.glob(os.path.join(dataset_folder, 'simple_math_equation_images__*.csv'))[0]
+
+# Load the CSV file
+df = pd.read_csv(os.path.join(dataset_folder, csv_file))
+
+# Number of samples to display
+num_samples_to_show = 6
+
+# Randomly sample rows from the dataframe
+sampled_rows = df.sample(n=num_samples_to_show)
+
+# Create a figure with num_samples_to_show rows and 1 column
+fig, axs = plt.subplots(num_samples_to_show, 1, figsize=(14, 3 * num_samples_to_show))
+
+for i, (_, row) in enumerate(sampled_rows.iterrows()):
+    # Load the image
+    img_path = os.path.join(dataset_folder, 'equation_images', row['image_filename'])
+    img = Image.open(img_path)
+    
+    # Display the image
+    axs[i].imshow(img, cmap='gray')
+    
+    # Set the title (simple description + '\n' + additional description)
+    axs[i].set_title(row['simple_description'] + '\n' + row['additional_description'], wrap=True)
+
+plt.tight_layout()
+
+
+
+Output Text:
+------------
+<Figure size 1400x1800 with 6 Axes>
+
+
+Output Images:
+--------------
+
+Image 1 Description:
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+The image contains a series of six equations, each displayed as a separate image block.  Each equation image block shows a simple arithmetic calculation (multiplication, subtraction, division, or addition) involving two numbers and their result. The numbers and mathematical symbols are rendered using different fonts and sizes, resulting in a non-uniform and somewhat stylized appearance.
+
+Each block includes descriptive text above the equation image. This text provides details about the equation's image size, the specific arithmetic operation used, and information regarding the font variations and the positional coordinates of the numbers, symbols, and the result within the image.  These coordinates appear to be relative to a pixel grid system within each image block. The descriptive text consistently mentions the number of digits in each argument and the result, providing a structured analysis of the visual layout.
+
+The overall structure suggests a systematic presentation of example images, possibly for a research project or documentation related to optical character recognition (OCR) or image processing techniques. The emphasis on font variations and positional inconsistencies within the equation images highlights the challenges these factors pose in automatically interpreting such images.
+
+
+------------------------------------------------------------
+Cell index: 2
+Input Cell Type: markdown
+Input Text:
+-----------
+# Print basic summary statistics
+
+Output Text:
+------------
+
+
+------------------------------------------------------------
+Cell index: 3
+Input Cell Type: python
+Input Text:
+-----------
+# Print basic summary statistics
+
+print('-' * 78)
+print('Counts of unique values in the operation column sorted by frequency:')
+print('-' * 68)
+operation_counts = df['operation'].value_counts()
+for op, count in operation_counts.items():
+    print(f'"{op}": {count}')
+
+for column in ['first argument', 'second argument', 'result']:
+    print('-' * 78)
+    print(f'4 most/least common {column} values and their counts:')
+    print('-' * 60)
+    value_counts = df[column].value_counts()
+    for value, count in value_counts.head(4).items():
+        print(f'"{value}": {count}')
+    print('...')
+    for value, count in value_counts.tail(4).items():
+        print(f'"{value}": {count}')
+
+print('-' * 78)
+
+
+Output Text:
+------------
+------------------------------------------------------------------------------
+Counts of unique values in the operation column sorted by frequency:
+--------------------------------------------------------------------
+"-": 65536
+"*": 65536
+"+": 65536
+"/": 65536
+------------------------------------------------------------------------------
+4 most/least common first argument values and their counts:
+------------------------------------------------------------
+"0": 5136
+"1": 3984
+"2": 1976
+"3": 1360
+...
+"7742": 8
+"8118": 8
+"8831": 8
+"9308": 8
+------------------------------------------------------------------------------
+4 most/least common second argument values and their counts:
+------------------------------------------------------------
+"0": 36752
+"1": 5120
+"2": 3328
+"3": 2496
+...
+"763": 48
+"977": 48
+"952": 48
+"943": 40
+------------------------------------------------------------------------------
+4 most/least common result values and their counts:
+------------------------------------------------------------
+"0": 41544
+"3": 1352
+"6": 1328
+"1": 1312
+...
+"397": 88
+"465": 80
+"459": 80
+"559": 72
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------
+Cell index: 4
+Input Cell Type: markdown
+Input Text:
+-----------
+# Display a single equation image with its labels
+
+Output Text:
+------------
+
+
+------------------------------------------------------------
+Cell index: 5
+Input Cell Type: python
+Input Text:
+-----------
+# Display a single equation image with its labels
+
+# Randomly select a single row from the dataframe
+selected_row = df.sample(n=1).iloc[0]
+
+# Load the equation image
+eq_img_path = os.path.join(dataset_folder, 'equation_images', selected_row['image_filename'])
+eq_img = Image.open(eq_img_path)
+
+# Load the labels image
+label_img_path = os.path.join(dataset_folder, 'label_images', selected_row['image_filename'])
+label_img = Image.open(label_img_path)
+
+# Create the first figure with 2x1 subplot
+fig1, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 6))
+
+# Display the equation image
+ax1.imshow(eq_img, cmap='gray')
+ax1.set_title("Equation Image")
+ax1.axis('off')
+
+# Display the full labels image
+ax2.imshow(label_img, cmap='gray')
+ax2.set_title("Labels Image")
+ax2.axis('off')
+
+plt.tight_layout()
+plt.show()
+
+
+Output Text:
+------------
+<Figure size 1500x600 with 2 Axes>
+
+
+Output Images:
+--------------
+
+Image 1 Description:
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a vertically stacked pair of horizontal black rectangles. The top rectangle contains a mathematical equation written in white, large, stylized font. The equation is "71 + 382 ÷ 453".  The numbers are clearly visible and well-spaced. The top rectangle is labeled "Equation Image".
+
+
+The bottom rectangle is significantly less clear. It's filled with thin, horizontal, white lines of varying lengths and spacing, creating a somewhat chaotic or noisy appearance. These lines are not uniform in thickness or alignment, suggesting they may be a representation of data rather than a structured image. The bottom rectangle is labeled "Labels Image".
+
+The overall impression is that the top rectangle shows the input image of a handwritten equation, while the bottom rectangle shows a corresponding output or processed representation, perhaps related to character segmentation or labeling in an optical character recognition (OCR) process.  The bottom image appears to represent character bounding boxes or similar data derived from the equation image.
+
+
+------------------------------------------------------------
+Cell index: 6
+Input Cell Type: markdown
+Input Text:
+-----------
+# Now create an additional figure with 4x1 subplot with all labels parts separated and annotated
+
+Output Text:
+------------
+
+
+------------------------------------------------------------
+Cell index: 7
+Input Cell Type: python
+Input Text:
+-----------
+# Randomly select a single row from the dataframe
+selected_row = df.sample(n=1).iloc[0]
+
+# Load the equation image
+eq_img_path = os.path.join(dataset_folder, 'equation_images', selected_row['image_filename'])
+eq_img = Image.open(eq_img_path)
+
+# Load the labels image
+label_img_path = os.path.join(dataset_folder, 'label_images', selected_row['image_filename'])
+label_img = Image.open(label_img_path)
+
+# Convert labels image to numpy array
+label_array = np.array(label_img)
+
+
+# Get the heights of each part
+char_order = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '-', '*', '/', '=', ' ']
+section_order = ["argument 1", "operation", "argument 2", "equal sign", "result", "digit", "symbol", "space"]
+font_order = [
+    'ARIALN', 'times', 'verdanaz', 'georgiai', 'couri', 'tahomabd', 'impact', 'comicz',
+    'calibriz', 'GARA', 'pala', 'BOOKOSBI', 'CENTURY', 'trebucbi', 'GILSANUB', 'BASKVILL',
+    'ROCKEB', 'FRADMCN', 'cambriaz', 'consola', 'COPRGTB', 'PAPYRUS', 'BRUSHSCI', 'lucon',
+    'BAUHS93', 'BOD_BLAI', 'AGENCYR', 'ALGER', 'BELLI', 'BRLNSB', 'BRITANIC', 'BROADW',
+    'CALIFR', 'CALISTB', 'CASTELAR', 'CENTAUR', 'CHILLER', 'COLONNA', 'COOPBL', 'ELEPHNTI',
+    'ENGR', 'ERASBD', 'FELIXTI', 'FORTE', 'FREESCPT', 'GIGI', 'GOUDOSI', 'HATTEN',
+    'HARLOWSI', 'HTOWERT', 'JOKERMAN', 'KUNSTLER', 'LCALLIG', 'MAGNETOB', 'MAIAN', 'MATURASC',
+    'MISTRAL', 'MOD20', 'MTCORSVA', 'NIAGENG', 'ONYX', 'PLAYBILL', 'POORICH', 'PRISTINA',
+    'RAGE', 'RAVIE', 'SCRIPTBL', 'SHOWG', 'STENCIL', 'TEMPSITC', 'VINERITC', 'VIVALDII',
+    'VLADIMIR', 'seguiemj', 'Candara', 'corbelb', 'Gabriola', 'Inkfree', 'javatext', 'LEELAWDB',
+    'micross', 'mvboli', 'sylfaen', 'BERNHC', 'BKANT', 'BRADHITC', 'BRLNSDB', 'COPRGTL',
+    'DUBAI-LIGHT', 'ERASDEMI', 'ERASLGHT', 'FRABKIT', 'FRAHV', 'FRAMDCN', 'FTLTLT', 'GLECB',
+    'GOTHICI', 'HARNGTON', 'IMPRISHA', 'ITCBLKAD', 'ITCKRIST', 'LATINWD', 'LBRITEDI', 'LHANDW'
+]
+
+# from config import CHAR_ORDER, SECTION_ORDER, FONT_ORDER
+# char_order = CHAR_ORDER
+# section_order = SECTION_ORDER
+# font_order = FONT_ORDER
+
+# Split the labels image
+char_height = len(char_order)
+section_height = len(section_order)
+font_height = len(font_order)
+
+char_image = label_array[:char_height]
+section_image = label_array[char_height:char_height+section_height]
+font_image = label_array[char_height+section_height:]
+
+# Create the main figure with 4 subplots
+fig, axs = plt.subplots(4, 1, figsize=(20, 25), gridspec_kw={'height_ratios': [2, 2, 2, 9]})
+plt.subplots_adjust(hspace=0.2)
+
+# Plot the original equation image
+axs[0].imshow(eq_img, cmap='gray', aspect='auto', interpolation='nearest')
+axs[0].set_title(f'Equation Image: "{selected_row["full string"]}"', fontsize=16)
+
+# Plot character labels
+axs[1].imshow(char_image, aspect='auto', cmap='gray', interpolation='nearest')
+axs[1].set_title("Character Labels", fontsize=16)
+axs[1].set_yticks(range(len(char_order)))
+axs[1].set_yticklabels([f'"{char}"' for char in char_order])
+
+# Plot section labels
+axs[2].imshow(section_image, aspect='auto', cmap='gray', interpolation='nearest')
+axs[2].set_title("Section Labels", fontsize=16)
+axs[2].set_yticks(range(len(section_order)))
+axs[2].set_yticklabels([f'"{section}"' for section in section_order])
+
+# Plot font labels
+axs[3].imshow(font_image, aspect='auto', cmap='gray', interpolation='nearest')
+axs[3].set_title("Font Labels", fontsize=16)
+axs[3].set_yticks(range(len(font_order) + 1))
+axs[3].set_yticklabels([f'"{font}"' for font in font_order + ["other"]])
+
+# Add x-axis label to the bottom subplot
+axs[3].set_xlabel("Time", fontsize=14)
+
+plt.tight_layout()
+plt.show()
+
+# Print information about the selected equation
+print(f"Equation: {selected_row['full string']}")
+print(f"Simple description: {selected_row['simple_description']}")
+print(f"Additional description: {selected_row['additional_description']}")
+
+Output Text:
+------------
+<Figure size 2000x2500 with 4 Axes>
+Equation: 2745 / 15 = 183
+Simple description: An image of size 128x1156 of the equation "2745 / 15 = 183" (with the division operation), the digits and characters have varied vertical positions and have non-uniform widths, using many different mixed fonts (11)
+Additional description: First argument has 4 digits, second argument has 2 digits, result has 3 digits. 1st argument is at timepoints [157, 452], operation symbol is at [485, 510], 2nd argument is at [544, 686], equal sign is at [711, 772], and the result at [796, 1013]
+
+
+Output Images:
+--------------
+
+Image 1 Description:
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+The image displays the results of an optical character recognition (OCR) and layout analysis process on an image of a handwritten mathematical equation: "2745 / 15 = 183".  The image is structured in four distinct sections.
+
+The top section shows the original equation image itself. The second section provides a character-level labeling, indicating the location and type of each character (digit, symbol, etc.) within the equation. This is represented as a heatmap-like representation where white blocks show the presence of a character.  The third section presents a section-level labeling, showing the spatial extent of different sections like "argument 1," "operation," "argument 2," "equal sign," "result," etc. Again, this is a heatmap-like representation. Finally, the bottom section displays a font-level labeling, indicating the fonts potentially used for each part of the equation across time (horizontal axis). This section is also a heatmap showing the likelihood of different fonts being used.  Each row represents a different font.
+
+In essence, the image visualizes the OCR's interpretation of the image's content at different levels of granularity: individual characters, equation sections, and potential fonts. This allows for a detailed analysis of the OCR process and its success in identifying the components and structure of the handwritten equation.
+
+
+------------------------------------------------------------
+Cell index: 8
+Input Cell Type: markdown
+Input Text:
+-----------
+# Display equation image with colored bounding boxes
+
+Output Text:
+------------
+
+
+------------------------------------------------------------
+Cell index: 9
+Input Cell Type: python
+Input Text:
+-----------
+# Display equation image with colored bounding boxes
+
+# Randomly select a single row from the dataframe
+selected_row = df.sample(n=1).iloc[0]
+
+# Load the equation image
+eq_img_path = os.path.join(dataset_folder, 'equation_images', selected_row['image_filename'])
+eq_img = Image.open(eq_img_path)
+
+# Create figure and axis
+fig, ax = plt.subplots(figsize=(15, 7))
+
+# Display the equation image
+ax.imshow(eq_img, cmap='gray')
+
+# Define colors for each part
+colors = ['red', 'blue', 'green', 'orange', 'purple']
+parts = ['argument1', 'operation', 'argument2', 'equal_sign', 'result']
+
+# Create bounding boxes
+for part, color in zip(parts, colors):
+    start = selected_row[f'{part}_start']
+    end = selected_row[f'{part}_end']
+    rect = plt.Rectangle((start, 0), end - start, eq_img.height, 
+                         fill=False, edgecolor=color, linewidth=4)
+    ax.add_patch(rect)
+    ax.text(start, eq_img.height + 5, part, color=color, 
+            ha='left', va='top', rotation=40, fontsize=10)
+
+# Set title and remove axis ticks
+ax.set_title(f"Equation: \"{selected_row['full string']}\"", fontsize=16)
+ax.set_xticks([])
+ax.set_yticks([])
+
+# Adjust layout and display
+plt.tight_layout()
+plt.show()
+
+# Print information about the selected equation
+print(f"Equation: \"{selected_row['full string']}\"")
+print(f"Simple description: {selected_row['simple_description']}")
+print(f"Additional description: {selected_row['additional_description']}")
+print("\nBounding box locations:")
+for part in parts:
+    print(f"{part}: [{selected_row[f'{part}_start']}, {selected_row[f'{part}_end']}]")
+
+
+Output Text:
+------------
+<Figure size 1500x700 with 1 Axes>
+Equation: "2304 / 96 = 24"
+Simple description: An image of size 128x1054 of the equation "2304 / 96 = 24" (with the division operation), the digits and characters have varied vertical positions and have non-uniform widths, using many different mixed fonts (10)
+Additional description: First argument has 4 digits, second argument has 2 digits, result has 2 digits. 1st argument is at timepoints [158, 456], operation symbol is at [490, 539], 2nd argument is at [567, 729], equal sign is at [753, 824], and the result at [854, 924]
+
+Bounding box locations:
+argument1: [158, 456]
+operation: [490, 539]
+argument2: [567, 729]
+equal_sign: [753, 824]
+result: [854, 924]
+
+
+Output Images:
+--------------
+
+Image 1 Description:
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a horizontal rectangular banner showing a simple mathematical equation: "2304 / 96 = 24".  The equation is displayed in large, white numerals and symbols on a black background. Each element of the equation (the two numbers being divided, the division symbol, the equals sign, and the result) is clearly separated and framed with a different colored bounding box.
+
+The bounding boxes are color-coded to identify each part: the first number (2304) is within a red box, labeled "argument1"; the division symbol (/) is in blue, labeled "operation"; the second number (96) is in green, labeled "argument2"; the equals sign (=) is in orange, labeled "equal_sign"; and the result (24) is enclosed in purple, labeled "result".  Above the equation, the text "Equation: "2304 / 96 = 24"" is displayed, confirming the equation being represented visually.  The color-coded boxes and labels provide a clear structural breakdown of the components of the equation.
+
+
+------------------------------------------------------------
+Cell index: 10
+Input Cell Type: markdown
+Input Text:
+-----------
+# Display another equation image with colored bounding boxes
+
+Output Text:
+------------
+
+
+------------------------------------------------------------
+Cell index: 11
+Input Cell Type: python
+Input Text:
+-----------
+# Display equation image with colored bounding boxes
+
+# Randomly select a single row from the dataframe
+selected_row = df.sample(n=1).iloc[0]
+
+# Load the equation image
+eq_img_path = os.path.join(dataset_folder, 'equation_images', selected_row['image_filename'])
+eq_img = Image.open(eq_img_path)
+
+# Create figure and axis
+fig, ax = plt.subplots(figsize=(15, 7))
+
+# Display the equation image
+ax.imshow(eq_img, cmap='gray')
+
+# Define colors for each part
+colors = ['red', 'blue', 'green', 'orange', 'purple']
+parts = ['argument1', 'operation', 'argument2', 'equal_sign', 'result']
+
+# Create bounding boxes
+for part, color in zip(parts, colors):
+    start = selected_row[f'{part}_start']
+    end = selected_row[f'{part}_end']
+    rect = plt.Rectangle((start, 0), end - start, eq_img.height, 
+                         fill=False, edgecolor=color, linewidth=4)
+    ax.add_patch(rect)
+    ax.text(start, eq_img.height + 5, part, color=color, 
+            ha='left', va='top', rotation=40, fontsize=10)
+
+# Set title and remove axis ticks
+ax.set_title(f"Equation: \"{selected_row['full string']}\"", fontsize=16)
+ax.set_xticks([])
+ax.set_yticks([])
+
+# Adjust layout and display
+plt.tight_layout()
+plt.show()
+
+# Print information about the selected equation
+print(f"Equation: \"{selected_row['full string']}\"")
+print(f"Simple description: {selected_row['simple_description']}")
+print(f"Additional description: {selected_row['additional_description']}")
+print("\nBounding box locations:")
+for part in parts:
+    print(f"{part}: [{selected_row[f'{part}_start']}, {selected_row[f'{part}_end']}]")
+
+
+Output Text:
+------------
+<Figure size 1500x700 with 1 Axes>
+Equation: "806 - 27 = 779"
+Simple description: An image of size 128x1099 of the equation "806 - 27 = 779" (with the subtraction operation), the digits and characters have varied vertical positions and have non-uniform widths, using many different mixed fonts (9)
+Additional description: First argument has 3 digits, second argument has 2 digits, result has 3 digits. 1st argument is at timepoints [137, 320], operation symbol is at [361, 429], 2nd argument is at [472, 608], equal sign is at [641, 695], and the result at [735, 961]
+
+Bounding box locations:
+argument1: [137, 320]
+operation: [361, 429]
+argument2: [472, 608]
+equal_sign: [641, 695]
+result: [735, 961]
+
+
+Output Images:
+--------------
+
+Image 1 Description:
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+The image is a horizontal rectangular arrangement showing a mathematical equation: "806 - 27 = 779". Each component of the equation (the two arguments, the minus sign, the equals sign, and the result) is individually enclosed within a colored box. 
+
+
+Specifically, the number "806" is in a red box, the minus sign ("-") is in a blue box, the number "27" is in a green box, the equals sign ("=") is in an orange box, and the number "779" is in a purple box. Below each box, a small text label identifies the component's role (argument1, operation, argument2, equal_sign, result). The background is black, making the white numbers and symbols stand out clearly. The equation itself is also displayed as text at the top of the image.
+
+
+------------------------------------------------------------
+Cell index: 12
+Input Cell Type: python
+Input Text:
+-----------
+
+
+Output Text:
+------------
+
+
+------------------------------------------------------------
+
+================================================================================
+================================================================================
+requirements.txt:
+=================
+numpy
+pandas
+matplotlib
+Pillow
+tqdm
+kaggle
+
+================================================================================
+================================================================================
+config.py:
+==========
+# Configuration parameters and fixed data dictionaries/lists for ImSME dataset generation
+
+# Character replacement dictionary
+CHAR_REPLACEMENT_DICT = {
+    '"': 'doublequote',
+    "'": 'singlequote',
+    '\\': 'backslash',
+    '/': 'forwardslash',
+    ':': 'colon',
+    '*': 'asterisk',
+    '?': 'questionmark',
+    '<': 'lessthan',
+    '>': 'greaterthan',
+    '|': 'pipe',
+    ' ': 'space',
+    '(': 'leftparenthesis',
+    ')': 'rightparenthesis',
+    '[': 'leftbracket',
+    ']': 'rightbracket',
+    '{': 'leftbrace',
+    '}': 'rightbrace',
+    '#': 'hash',
+    '%': 'percent',
+    '&': 'ampersand',
+    '^': 'caret',
+    '@': 'at',
+    ';': 'semicolon',
+    ',': 'comma',
+    '.': 'dot',
+    '`': 'backtick',
+    '=': 'equal',
+    '!': 'exclamation',
+    '+': 'plus',
+    '-': 'minus',
+    '_': 'underscore',
+    '$': 'dollar',
+    '~': 'tilde',
+}
+
+# Reverse character replacement dictionary
+REVERSE_CHAR_REPLACEMENT_DICT = {v: k for k, v in CHAR_REPLACEMENT_DICT.items()}
+
+# Character lists
+BASE_ENGLISH_CHARACTERS_LIST = list('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"#$%&()*+-/:;<=>?@[\\]^{|}')
+CHARACTERS_LIST = BASE_ENGLISH_CHARACTERS_LIST
+
+# Char order for label generation
+CHAR_ORDER = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '-', '*', '/', '=', ' ']
+
+# Section order for label generation
+SECTION_ORDER = ["argument 1", "operation", "argument 2", "equal sign", "result", "digit", "symbol", "space"]
+
+# Font order for label generation
+FONT_ORDER = [
+    'ARIALN', 'times', 'verdanaz', 'georgiai', 'couri', 'tahomabd', 'impact', 'comicz',
+    'calibriz', 'GARA', 'pala', 'BOOKOSBI', 'CENTURY', 'trebucbi', 'GILSANUB', 'BASKVILL',
+    'ROCKEB', 'FRADMCN', 'cambriaz', 'consola', 'COPRGTB', 'PAPYRUS', 'BRUSHSCI', 'lucon',
+    'BAUHS93', 'BOD_BLAI', 'AGENCYR', 'ALGER', 'BELLI', 'BRLNSB', 'BRITANIC', 'BROADW',
+    'CALIFR', 'CALISTB', 'CASTELAR', 'CENTAUR', 'CHILLER', 'COLONNA', 'COOPBL', 'ELEPHNTI',
+    'ENGR', 'ERASBD', 'FELIXTI', 'FORTE', 'FREESCPT', 'GIGI', 'GOUDOSI', 'HATTEN',
+    'HARLOWSI', 'HTOWERT', 'JOKERMAN', 'KUNSTLER', 'LCALLIG', 'MAGNETOB', 'MAIAN', 'MATURASC',
+    'MISTRAL', 'MOD20', 'MTCORSVA', 'NIAGENG', 'ONYX', 'PLAYBILL', 'POORICH', 'PRISTINA',
+    'RAGE', 'RAVIE', 'SCRIPTBL', 'SHOWG', 'STENCIL', 'TEMPSITC', 'VINERITC', 'VIVALDII',
+    'VLADIMIR', 'seguiemj', 'Candara', 'corbelb', 'Gabriola', 'Inkfree', 'javatext', 'LEELAWDB',
+    'micross', 'mvboli', 'sylfaen', 'BERNHC', 'BKANT', 'BRADHITC', 'BRLNSDB', 'COPRGTL',
+    'DUBAI-LIGHT', 'ERASDEMI', 'ERASLGHT', 'FRABKIT', 'FRAHV', 'FRAMDCN', 'FTLTLT', 'GLECB',
+    'GOTHICI', 'HARNGTON', 'IMPRISHA', 'ITCBLKAD', 'ITCKRIST', 'LATINWD', 'LBRITEDI', 'LHANDW'
+]
+
+
+# Section name mapping
+SECTION_NAME_MAPPING = {
+    'argument 1': 'argument1',
+    'operation': 'operation',
+    'argument 2': 'argument2',
+    'equal sign': 'equal_sign',
+    'result': 'result'
+}
+
+# Operations
+OPERATIONS = ['+', '-', '*', '/']
+
+# Symbol characters
+SYMBOL_CHARS = set(['+', '-', '*', '/', '='])
+
+# Digit characters
+DIGIT_CHARS = set('0123456789')
+
+# Font name to short path dictionary
+NAME_SHORT_PATH_DICT = {
+    'Franklin Gothic Demi': 'FRADM.TTF',
+    'Goudy Old Style': 'GOUDOSI.TTF',
+    'Cambria': 'cambriaz.ttf',
+    'David': 'davidbd.ttf',
+    'Informal Roman': 'INFROMAN.TTF',
+    'Dubai': 'DUBAI-LIGHT.TTF',
+    'Jokerman': 'JOKERMAN.TTF',
+    'Broadway': 'BROADW.TTF',
+    'Agency FB': 'AGENCYR.TTF',
+    'Eras Bold ITC': 'ERASBD.TTF',
+    'Franklin Gothic Heavy': 'FRAHV.TTF',
+    'Times New Roman': 'times.ttf',
+    'Viner Hand ITC': 'VINERITC.TTF',
+    'Tahoma': 'tahomabd.ttf',
+    'Stencil': 'STENCIL.TTF',
+    'Chiller': 'CHILLER.TTF',
+    'Segoe UI': 'segoeuil.ttf',
+    'Rockwell': 'ROCK.TTF',
+    'Trebuchet MS': 'trebucbi.ttf',
+    'Lucida Fax': 'LFAXD.TTF',
+    'Calisto MT': 'CALISTB.TTF',
+    'Footlight MT Light': 'FTLTLT.TTF',
+    'Bodoni MT': 'BOD_BLAI.TTF',
+    'Microsoft PhagsPa': 'phagspa.ttf',
+    'Franklin Gothic Book': 'FRABKIT.TTF',
+    'Book Antiqua': 'BKANT.TTF',
+    'Segoe Print': 'segoepr.ttf',
+    'Century Gothic': 'GOTHICI.TTF',
+    'Constantia': 'constani.ttf',
+    'Bradley Hand ITC': 'BRADHITC.TTF',
+    'Britannic Bold': 'BRITANIC.TTF',
+    'Gill Sans Ultra Bold Condensed': 'GILLUBCD.TTF',
+    'Lucida Bright': 'LBRITEDI.TTF',
+    'Segoe Script': 'segoescb.ttf',
+    'Ebrima': 'ebrimabd.ttf',
+    'Century': 'CENTURY.TTF',
+    'Berlin Sans FB': 'BRLNSB.TTF',
+    'Calibri': 'calibriz.ttf',
+    'Hadassah Friedlaender': 'HADASAH.TTF',
+    'Palatino Linotype': 'pala.ttf',
+    'Rockwell Condensed': 'ROCC____.TTF',
+    'Lucida Sans': 'LSANS.TTF',
+    'Candara': 'Candara.ttf',
+    'Yu Gothic': 'YuGothM.ttc',
+    'Lucida Sans Typewriter': 'LTYPEO.TTF',
+    'Nirmala UI': 'NirmalaB.ttf',
+    'Garamond': 'GARA.TTF',
+    'Microsoft Tai Le': 'taile.ttf',
+    'Perpetua': 'PERB____.TTF',
+    'Californian FB': 'CALIFR.TTF',
+    'Bookman Old Style': 'BOOKOSBI.TTF',
+    'Microsoft JhengHei': 'msjh.ttc',
+    'French Script MT': 'FRSCRIPT.TTF',
+    'Palace Script MT': 'PALSCRI.TTF',
+    'Aharoni': 'ahronbd.ttf',
+    'Gigi': 'GIGI.TTF',
+    'Gill Sans Ultra Bold': 'GILSANUB.TTF',
+    'Comic Sans MS': 'comicz.ttf',
+    'Courier New': 'couri.ttf',
+    'Leelawadee': 'LEELAWDB.TTF',
+    'Corbel': 'corbelb.ttf',
+    'Elephant': 'ELEPHNTI.TTF',
+    'Verdana': 'verdanaz.ttf',
+    'Sitka': 'SitkaVF.ttf',
+    'Segoe UI Emoji': 'seguiemj.ttf',
+    'Leelawadee UI': 'LeelaUIb.ttf',
+    'Bell MT': 'BELLI.TTF',
+    'Georgia': 'georgiai.ttf',
+    'Monotype Corsiva': 'MTCORSVA.TTF',
+    'SimSun-ExtB': 'simsunb.ttf',
+    'Consolas': 'consola.ttf',
+    'Lucida Calligraphy': 'LCALLIG.TTF',
+    'Lucida Handwriting': 'LHANDW.TTF',
+    'Arial': 'ARIALN.TTF',
+    'Levenim MT': 'lvnmbd.ttf',
+    'Pristina': 'PRISTINA.TTF',
+    'Gill Sans MT Condensed': 'GILC____.TTF',
+    'Copperplate Gothic Light': 'COPRGTL.TTF',
+    'Gill Sans MT': 'GIL_____.TTF',
+    'High Tower Text': 'HTOWERT.TTF',
+    'Segoe UI Variable': 'SegUIVar.ttf',
+    'Bahnschrift': 'bahnschrift.ttf',
+    'Vladimir Script': 'VLADIMIR.TTF',
+    'SimSun': 'simsun.ttc',
+    'Arial Rounded MT Bold': 'ARLRDBD.TTF',
+    'MS Reference Sans Serif': 'REFSAN.TTF',
+    'Microsoft YaHei': 'msyh.ttc',
+    'Segoe UI Historic': 'seguihis.ttf',
+    'Microsoft Himalaya': 'himalaya.ttf',
+    'Algerian': 'ALGER.TTF',
+    'Perpetua Titling MT': 'PERTIBD.TTF',
+    'Harlow Solid Italic': 'HARLOWSI.TTF',
+    'Niagara Solid': 'NIAGSOL.TTF',
+    'Gisha': 'gishabd.ttf',
+    'Centaur': 'CENTAUR.TTF',
+    'Rockwell Extra Bold': 'ROCKEB.TTF',
+    'Eras Medium ITC': 'ERASMD.TTF',
+    'Rod': 'rod.ttf',
+    'Kristen ITC': 'ITCKRIST.TTF',
+    'Tw Cen MT': 'TCM_____.TTF',
+    'Microsoft Uighur': 'MSUIGHUR.TTF',
+    'Century Schoolbook': 'SCHLBKI.TTF',
+    'Niagara Engraved': 'NIAGENG.TTF',
+    'Playbill': 'PLAYBILL.TTF',
+    'Juice ITC': 'JUICE___.TTF',
+    'Forte': 'FORTE.TTF',
+    'Segoe UI Symbol': 'seguisym.ttf',
+    'Ink Free': 'Inkfree.ttf',
+    'Blackadder ITC': 'ITCBLKAD.TTF',
+    'Edwardian Script ITC': 'ITCEDSCR.TTF',
+    'Sylfaen': 'sylfaen.ttf',
+    'Kunstler Script': 'KUNSTLER.TTF',
+    'Tw Cen MT Condensed': 'TCCB____.TTF',
+    'Gabriola': 'Gabriola.ttf',
+    'Eras Light ITC': 'ERASLGHT.TTF',
+    'Tw Cen MT Condensed Extra Bold': 'TCCEB.TTF',
+    'Wide Latin': 'LATINWD.TTF',
+    'Mistral': 'MISTRAL.TTF',
+    'Vivaldi': 'VIVALDII.TTF',
+    'Engravers MT': 'ENGR.TTF',
+    'Berlin Sans FB Demi': 'BRLNSDB.TTF',
+    'Impact': 'impact.ttf',
+    'Castellar': 'CASTELAR.TTF',
+    'Microsoft Yi Baiti': 'msyi.ttf',
+    'Snap ITC': 'SNAP____.TTF',
+    'Lucida Sans Unicode': 'l_10646.ttf',
+    'Eras Demi ITC': 'ERASDEMI.TTF',
+    'Brush Script MT': 'BRUSHSCI.TTF',
+    'Gill Sans MT Ext Condensed Bold': 'GLSNECB.TTF',
+    'Rage Italic': 'RAGE.TTF',
+    'Bauhaus 93': 'BAUHS93.TTF',
+    'Script MT Bold': 'SCRIPTBL.TTF',
+    'Myanmar Text': 'mmrtextb.ttf',
+    'Mongolian Baiti': 'monbaiti.ttf',
+    'Franklin Gothic Demi Cond': 'FRADMCN.TTF',
+    'Microsoft New Tai Lue': 'ntailub.ttf',
+    'Franklin Gothic Medium': 'framd.ttf',
+    'Goudy Stout': 'GOUDYSTO.TTF',
+    'Tempus Sans ITC': 'TEMPSITC.TTF',
+    'Matura MT Script Capitals': 'MATURASC.TTF',
+    'Cooper Black': 'COOPBL.TTF',
+    'Baskerville Old Face': 'BASKVILL.TTF',
+    'Ravie': 'RAVIE.TTF',
+    'MingLiU-ExtB': 'mingliub.ttc',
+    'Imprint MT Shadow': 'IMPRISHA.TTF',
+    'Microsoft Sans Serif': 'micross.ttf',
+    'Franklin Gothic Medium Cond': 'FRAMDCN.TTF',
+    'Showcard Gothic': 'SHOWG.TTF',
+    'Narkisim': 'nrkis.ttf',
+    'Colonna MT': 'COLONNA.TTF',
+    'Bernard MT Condensed': 'BERNHC.TTF',
+    'Modern No. 20': 'MOD20.TTF',
+    'Felix Titling': 'FELIXTI.TTF',
+    'Freestyle Script': 'FREESCPT.TTF',
+    'Copperplate Gothic Bold': 'COPRGTB.TTF',
+    'OCR A Extended': 'OCRAEXT.TTF',
+    'Miriam': 'mriam.ttf',
+    'Gloucester MT Extra Condensed': 'GLECB.TTF',
+    'Harrington': 'HARNGTON.TTF',
+    'Maiandra GD': 'MAIAN.TTF',
+    'Lucida Console': 'lucon.ttf',
+    'Haettenschweiler': 'HATTEN.TTF',
+    'Magneto': 'MAGNETOB.TTF',
+    'MV Boli': 'mvboli.ttf',
+    'Curlz MT': 'CURLZ___.TTF',
+    'Javanese Text': 'javatext.ttf',
+    'FrankRuehl': 'frank.ttf',
+    'Onyx': 'ONYX.TTF',
+    'Poor Richard': 'POORICH.TTF',
+    'Gadugi': 'gadugib.ttf',
+    'Papyrus': 'PAPYRUS.TTF',
+    'MS Gothic': 'msgothic.ttc'
+}
+
+================================================================================
+================================================================================
+download_ImSME_dataset.py:
+==========================
+import os
+from kaggle.api.kaggle_api_extended import KaggleApi
+from urllib.parse import urlparse
+
+# instructions for setting up Kaggle API:
+# https://www.kaggle.com/docs/api
+
+# 1. pip install kaggle
+# 2. Go to your kaggle account settings, click on 'Create New API Token'
+# 3. Save the kaggle.json file to C:\Users\<username>\.kaggle\kaggle.json (Windows)
+# 3. Save the kaggle.json file to ~/.kaggle/kaggle.json (Linux)
+
+def download_ImSME_dataset(output_dir):
+    # Initialize and authenticate Kaggle API
+    api = KaggleApi()
+    api.authenticate()
+
+    # ImSME dataset URL
+    dataset_url = "https://www.kaggle.com/datasets/selfishgene/imsme-images-of-simple-math-equations"
+
+    try:
+        # Extract dataset info from URL
+        path = urlparse(dataset_url).path
+        parts = path.strip('/').split('/')
+        if len(parts) < 3 or parts[0] != 'datasets':
+            raise ValueError(f"Invalid Kaggle dataset URL: {dataset_url}")
+        
+        owner, dataset_name = parts[1], parts[2]
+        dataset = f"{owner}/{dataset_name}"
+        
+        # Create output directory
+        os.makedirs(output_dir, exist_ok=True)
+        
+        print(f"Downloading dataset: {dataset}")
+        api.dataset_download_files(dataset, path=output_dir, unzip=True)
+        print(f"Dataset {dataset} downloaded successfully to {output_dir}")
+    
+    except Exception as e:
+        print(f"Error downloading {dataset_url}: {str(e)}")
+
+if __name__ == "__main__":
+    # Output directory
+    output_dir = "data"
+    
+    download_ImSME_dataset(output_dir)
+
+================================================================================
+================================================================================
+sample_images/sample_image_with_segmented_main_equation_parts.png:
+==================================================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+The image is a horizontal rectangular black banner displaying a simple arithmetic equation: "612 + 261 = 873".  The numbers and the plus and equals signs are rendered in a stylized serif font, appearing white against the black background. Each element of the equation (the two numbers, the plus sign, the equals sign, and the result) is individually enclosed within a colored box.
+
+Specifically, the number 612 is contained in a red box, the "+" symbol is in a blue box, the number 261 is in a green box, the "=" sign is in an orange box, and the number 873 is in a purple box.  Beneath each box, a small text label identifies the element's role: "argument1," "operation," "argument2," "equal_sign," and "result."  The labels are colored to match their corresponding boxes, further clarifying the layout.  The overall arrangement provides a clear and visually organized representation of the equation's components.  At the top, the equation is also stated textually above the visual representation.
+
+================================================================================
+================================================================================
+generate_ImSME_dataset.py:
+==========================
+import os
+import random
+import numpy as np
+import pandas as pd
+from PIL import Image
+from tqdm import tqdm
+from utils import equation_to_image, generate_indicators, indicators_to_images, generate_equation_descriptions
+from config import (CHAR_ORDER, SECTION_ORDER, FONT_ORDER, OPERATIONS, SECTION_NAME_MAPPING)
+
+
+def generate_and_save_images(df, num_equations, num_samples_per_equation, output_folder, char_images_folder, 
+                             equations_df_name, space_padding_range, fraction_canonical, 
+                             fraction_single_font, fraction_limited_font_set):
+    
+    # Create output folders
+    equation_images_folder = os.path.join(output_folder, 'equation_images')
+    label_images_folder = os.path.join(output_folder, 'label_images')
+    os.makedirs(equation_images_folder, exist_ok=True)
+    os.makedirs(label_images_folder, exist_ok=True)
+
+    # Perform stratified sampling
+    sampled_rows = pd.DataFrame()
+    samples_per_operation = num_equations // len(OPERATIONS)
+    for operation in OPERATIONS:
+        operation_df = df[df['operation'] == operation]
+        if len(operation_df) <= samples_per_operation:
+            sampled_rows = pd.concat([sampled_rows, operation_df])
+        else:
+            sampled_rows = pd.concat([sampled_rows, operation_df.sample(n=samples_per_operation, replace=False)])
+
+    sampled_rows = sampled_rows.sample(frac=1).reset_index(drop=True)
+
+    new_rows = []
+    num_digits_equation = len(str(len(sampled_rows) - 1))
+    num_digits_sample = len(str(num_samples_per_equation))
+
+    for equation_index, row in tqdm(sampled_rows.iterrows(), total=len(sampled_rows), desc="Generating equation images"):
+        for sample_index in range(1, num_samples_per_equation + 1):
+            new_row = row.copy()
+            new_row['equation_index'] = equation_index
+            new_row['sample_index'] = sample_index
+            
+            current_fraction_canonical = fraction_canonical * 2 if sample_index in [1, 2, 3] else fraction_canonical
+            current_fraction_single_font = fraction_single_font * 2 if sample_index in [1, 2, 3] else fraction_single_font
+            
+            is_canonical = random.random() < current_fraction_canonical
+            new_row['is_canonical'] = is_canonical
+
+            rand_value = random.random()
+            if rand_value < current_fraction_single_font:
+                selected_font = random.choice(FONT_ORDER)
+                fonts_pool = [selected_font]
+                new_row['font_usage'] = selected_font
+            elif rand_value < (current_fraction_single_font + fraction_limited_font_set):
+                num_limited_fonts = random.randint(4, len(FONT_ORDER))
+                fonts_pool = FONT_ORDER[:num_limited_fonts]
+                new_row['font_usage'] = 'mixed_limited'
+            else:
+                fonts_pool = None
+                new_row['font_usage'] = 'mixed_full'
+
+            equation_string = row['full string']
+            if is_canonical:
+                equation_string = f"    {equation_string}    "
+            else:
+                equation_string = f"{' ' * random.randint(*space_padding_range)}{equation_string}{' ' * random.randint(*space_padding_range)}"
+
+            equation_image, char_details = equation_to_image(equation_string, char_images_folder, 
+                                                             use_random_augmentations=not is_canonical,
+                                                             fonts_pool=fonts_pool)
+
+            char_indicators, font_indicators, section_indicators = generate_indicators(char_details)
+
+            for original_name, new_name in SECTION_NAME_MAPPING.items():
+                indicator = section_indicators[original_name]
+                non_zero = np.nonzero(indicator)[0]
+                if len(non_zero) > 0:
+                    start = non_zero[0]
+                    end = non_zero[-1] + 1
+                    new_row[f'{new_name}_start'] = start
+                    new_row[f'{new_name}_end'] = end
+
+            char_image, font_image, section_image = indicators_to_images(char_indicators, font_indicators, section_indicators,
+                                                                         CHAR_ORDER, SECTION_ORDER, FONT_ORDER)
+
+            total_height = char_image.height + section_image.height + font_image.height
+            combined_label_image = Image.new('L', (equation_image.width, total_height))
+            combined_label_image.paste(char_image, (0, 0))
+            combined_label_image.paste(section_image, (0, char_image.height))
+            combined_label_image.paste(font_image, (0, char_image.height + section_image.height))
+
+            file_name = f"equation_{equation_index:0{num_digits_equation}d}_sample_{sample_index:0{num_digits_sample}d}.png"
+            equation_image.save(os.path.join(equation_images_folder, file_name), 'PNG', compress_level=8)
+            combined_label_image.save(os.path.join(label_images_folder, file_name), 'PNG', compress_level=8)
+            
+            new_row['image_filename'] = file_name
+
+            simple_desc, additional_desc = generate_equation_descriptions(new_row, char_details, equation_image.height, equation_image.width)
+            new_row['simple_description'] = simple_desc
+            new_row['additional_description'] = additional_desc
+
+            new_rows.append(new_row)
+
+    new_df = pd.DataFrame(new_rows)
+
+    columns = new_df.columns.tolist()
+    for col in ['is_canonical', 'font_usage', 'sample_index', 'equation_index', 'image_filename']:
+        columns.remove(col)
+    new_column_order = ['image_filename', 'equation_index', 'sample_index', 'font_usage', 'is_canonical'] + columns
+    new_df = new_df[new_column_order]
+
+    actual_samples = len(new_df)
+    new_filename = f"simple_math_equation_images__{equations_df_name.split('__')[1]}__{actual_samples}_rows.csv"
+    new_df.to_csv(os.path.join(output_folder, new_filename), index=False)
+
+    print('-' * 80)
+    print(f'Image generation completed! \nNew dataframe saved as "{new_filename}"')
+    print(f"Total number of equations processed: {len(sampled_rows)}")
+    print(f"Total number of samples generated: {actual_samples}")
+    print('-' * 40)
+    print(f"Operation distribution in the generated dataset:")
+    print(new_df['operation'].value_counts())
+    print('-' * 40)
+    print(f"Canonical vs Augmented distribution:")
+    print(new_df['is_canonical'].value_counts(normalize=True))
+    print('-' * 40)
+    print(f"Font usage distribution:")
+    print(new_df['font_usage'].value_counts(normalize=True))
+    print('-' * 80)
+
+    return new_df
+
+
+if __name__ == "__main__":
+    # if just_a_test is True, the script will generate a small dataset for testing purposes
+    just_a_test = True
+
+    # Dataset generation parameters
+    OUTPUT_HEIGHT = 128
+    RESIZE_HEIGHT_DIGIT = 112
+    RESIZE_HEIGHT_SYMBOL = 72
+    WIDTH_MULT_FACTORS = [0.25, 1.0]
+    SPACE_PADDING_RANGE = (4, 7)
+    FRACTION_CANONICAL = 0.2
+    FRACTION_SINGLE_FONT = 0.2
+    FRACTION_LIMITED_FONT_SET = 0.2
+
+    # Folder paths
+    equations_dataframe_folder = "data/simple_math_equations_dataset"
+    char_images_folder = "data/char_images_dataset_tight"
+    output_folder = "data/math_equations_images_dataset"
+
+    # Choose the equations database to use
+    equations_df_name = "simple_math_equations__4d_op_3d_eq_3d__1574610_rows.csv"
+    
+    # Load the equations dataframe
+    df = pd.read_csv(os.path.join(equations_dataframe_folder, equations_df_name))
+
+    # Generate datasets of different sizes
+    if just_a_test:
+        dataset_sizes = {
+            "tiny": (4, 4),   # 4 equations, 4 samples each
+            "small": (8, 4),  # 8 equations, 4 samples each
+            "medium": (16, 4) # 16 equations, 4 samples each
+        }
+    else:
+        dataset_sizes = {
+            "tiny": (2048, 8),   # 2048 equations, 8 samples each
+            "small": (8192, 8),  # 8192 equations, 8 samples each
+            "medium": (32768, 8) # 32768 equations, 8 samples each
+        }
+
+    for size_name, (num_equations, num_samples) in dataset_sizes.items():
+        print('-' * 80)
+        print(f"\nGenerating {size_name} dataset...")
+        print('-' * 30)
+        size_output_folder = f"{output_folder}_{size_name}"
+        generate_and_save_images(df, num_equations, num_samples, size_output_folder, char_images_folder, equations_df_name,
+                                 space_padding_range=SPACE_PADDING_RANGE, fraction_canonical=FRACTION_CANONICAL, 
+                                 fraction_single_font=FRACTION_SINGLE_FONT, fraction_limited_font_set=FRACTION_LIMITED_FONT_SET)
+        print('-' * 80)
+
+    print("\nImSME dataset generation completed.")
+
+================================================================================
+================================================================================
+create_char_images_dataset.py:
+==============================
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+from tqdm import tqdm
+import matplotlib.font_manager as fm
+from utils import create_char_image
+from config import CHAR_REPLACEMENT_DICT, CHARACTERS_LIST, NAME_SHORT_PATH_DICT
+
+def list_available_fonts():
+    font_paths = fm.findSystemFonts()
+    available_fonts = {}
+    for font_path in font_paths:
+        font_name = fm.FontProperties(fname=font_path).get_name()
+        available_fonts[font_name] = font_path
+    return available_fonts
+
+
+def create_char_images_dataset(output_folder, fonts_to_use, image_size=(128, 128), return_tight_bbox=False):
+    os.makedirs(output_folder, exist_ok=True)
+    
+    total_images = len([char for char in CHARACTERS_LIST]) * len(fonts_to_use)
+    print(f'Total images to save: {total_images}')
+    
+    with tqdm(total=total_images, desc="Generating character images") as pbar:
+        for char in CHARACTERS_LIST:
+            for font_name, font_path in fonts_to_use.items():
+                char_name = CHAR_REPLACEMENT_DICT.get(char, char)
+                # use the shortened font path as the font name
+                font_name_to_use = os.path.basename(font_path) if os.path.exists(font_path) else font_path.split('.')[0]
+                filename = f'char_{char_name}_font_{font_name_to_use}.png'
+                try:
+                    image = create_char_image(char, font_path, final_image_size=image_size, return_tight_bbox=return_tight_bbox)
+                    image.save(os.path.join(output_folder, filename))
+                    pbar.update(1)
+                except Exception as e:
+                    print(f'Error saving image: "{filename}". Error: {str(e)}')
+    
+    print(f'Character images dataset created in: {output_folder}')
+
+
+def display_sample_images(dataset_folder, num_samples=36):
+    files = os.listdir(dataset_folder)
+    sample_files = np.random.choice(files, num_samples, replace=False)
+    
+    num_rows = int(np.sqrt(num_samples))
+    num_cols = int(np.ceil(num_samples / num_rows))
+    
+    plt.figure(figsize=(18, 20))
+    
+    for i, file in enumerate(sample_files):
+        image = Image.open(os.path.join(dataset_folder, file))
+        char = file.split('_font_')[0].split('char_')[1]
+        font = file.split('_font_')[1].split('.')[0]
+        
+        plt.subplot(num_rows, num_cols, i + 1)
+        plt.imshow(image, cmap='gray')
+        plt.title(f'Char: "{char}"\nFont: "{font}"')
+        plt.axis('off')
+    
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    # Flag to choose between using all available fonts or just NAME_SHORT_PATH_DICT
+    USE_ALL_AVAILABLE_FONTS = False
+
+    print('-' * 80)
+    print("Creating character images dataset")
+    print('-' * 80)
+
+    # Set output folders
+    output_folder = "data/char_images_dataset"
+    output_folder_tight = "data/char_images_dataset_tight"
+    
+    # Get available fonts
+    available_fonts = list_available_fonts()
+    
+    if USE_ALL_AVAILABLE_FONTS:
+        fonts_to_use = available_fonts
+        print(f"Using all {len(fonts_to_use)} available fonts")
+    else:
+        fonts_to_use = {}
+        for font_name, short_path in NAME_SHORT_PATH_DICT.items():
+            full_path = next((path for name, path in available_fonts.items() if path.lower().endswith(short_path.lower())), None)
+            if full_path:
+                fonts_to_use[font_name] = full_path
+            else:
+                print(f"Warning: Font {font_name} ({short_path}) not found in available fonts.")
+        print(f"Using {len(fonts_to_use)} fonts from NAME_SHORT_PATH_DICT")
+    
+    print('-' * 80)
+    
+    # Create datasets
+    print("Creating regular character images dataset:")
+    create_char_images_dataset(output_folder, fonts_to_use, return_tight_bbox=False)
+    print('-' * 80)
+    
+    print("Creating tight bounding box character images dataset:")
+    create_char_images_dataset(output_folder_tight, fonts_to_use, return_tight_bbox=True)
+    print('-' * 80)
+    
+    # Display sample images from both datasets
+    print("Displaying sample images from regular dataset:")
+    display_sample_images(output_folder)
+    
+    print("Displaying sample images from tight bounding box dataset:")
+    display_sample_images(output_folder_tight)
+
+    print('-' * 80)
+    print("Character images dataset creation completed.")
+    print('-' * 80)
+================================================================================
+================================================================================
+create_equations_dataframe.py:
+==============================
+import os
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+from config import OPERATIONS
+
+
+def generate_equations(first_argument_num_digits, second_argument_num_digits, result_num_digits):
+    print(f'Generating equations with:')
+    print(f'First argument: up to {first_argument_num_digits} digits')
+    print(f'Second argument: up to {second_argument_num_digits} digits')
+    print(f'Result: up to {result_num_digits} digits')
+    print(f'Operations: {OPERATIONS}')
+
+    first_argument_numbers = range(0, 10 ** first_argument_num_digits)
+    second_argument_numbers = range(0, 10 ** second_argument_num_digits)
+    max_result = 10 ** result_num_digits - 1
+
+    data = []
+    for arg1 in tqdm(first_argument_numbers, desc="Generating equations"):
+        for arg2 in second_argument_numbers:
+            for op in OPERATIONS:
+                if op == '+':
+                    result = arg1 + arg2
+                elif op == '-':
+                    result = arg1 - arg2
+                elif op == '*':
+                    result = arg1 * arg2
+                elif op == '/':
+                    if arg2 != 0 and arg1 % arg2 == 0:
+                        result = arg1 // arg2
+                    else:
+                        continue
+                
+                if 0 <= result <= max_result:
+                    full_string = f"{arg1} {op} {arg2} = {result}"
+                    data.append([arg1, op, arg2, result, full_string])
+
+    columns = ["first argument", "operation", "second argument", "result", "full string"]
+    df = pd.DataFrame(data, columns=columns)
+    
+    print(f'Generated a total of {df.shape[0]} equations')
+    return df
+
+
+def save_dataframe(df, output_folder, filename):
+    os.makedirs(output_folder, exist_ok=True)
+    file_path = os.path.join(output_folder, filename)
+    df.to_csv(file_path, index=False)
+    print(f'Saved dataframe to: {file_path}')
+
+
+def print_basic_stats(df):
+    print("\nBasic Statistics:")
+    print("-----------------")
+    print("Operation distribution:")
+    print(df['operation'].value_counts())
+    print("\nNumber of unique values:")
+    for column in ['first argument', 'second argument', 'result']:
+        print(f"{column}: {df[column].nunique()}")
+    print("\nMost common values:")
+    for column in ['first argument', 'second argument', 'result']:
+        print(f"\n{column}:")
+        print(df[column].value_counts().head())
+
+
+if __name__ == "__main__":
+    output_folder = "data/simple_math_equations_dataset"
+    
+    # Generate different equation sets
+    equation_sets = [
+        (3, 3, 3),  # 3-digit op 3-digit = 3-digit
+        (4, 3, 3),  # 4-digit op 3-digit = 3-digit
+        (4, 4, 2),  # 4-digit op 4-digit = 2-digit
+    ]
+    
+    for first_digits, second_digits, result_digits in equation_sets:
+        print('-' * 80)
+        print(f"\nGenerating equations: {first_digits}d op {second_digits}d = {result_digits}d")
+        print('-' * 15)
+        df = generate_equations(first_digits, second_digits, result_digits)
+        
+        filename = f"simple_math_equations__{first_digits}d_op_{second_digits}d_eq_{result_digits}d__{df.shape[0]}_rows.csv"
+        save_dataframe(df, output_folder, filename)
+        print('-' * 80)
+        print_basic_stats(df)
+        print('-' * 80)
+
+    print("\nEquation dataframe creation completed.")
+
+================================================================================
+================================================================================
+utils.py:
+=========
+import os
+import random
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+from config import DIGIT_CHARS, SYMBOL_CHARS, CHAR_REPLACEMENT_DICT, SECTION_ORDER
+
+OUTPUT_HEIGHT = 128
+RESIZE_HEIGHT_DIGIT = 112
+RESIZE_HEIGHT_SYMBOL = 72
+WIDTH_MULT_FACTORS = [0.25, 1.0]
+
+
+def create_char_image(char, selected_font, final_image_size=(128, 128), return_tight_bbox=False):
+    image_size = (final_image_size[0] * 2, final_image_size[1] * 2)
+    font_size = 100
+    image = Image.new("L", image_size, "black")
+    draw = ImageDraw.Draw(image)
+    
+    font = ImageFont.truetype(selected_font, font_size)
+    text_bbox = draw.textbbox((0, 0), char, font=font)
+    text_width, text_height = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
+    
+    scale_H = (image_size[1] * 0.45) / text_height
+    scale_W = (image_size[0] * 0.45) / text_width
+    scale = np.array([scale_H, scale_W]).min()
+    scaled_font = ImageFont.truetype(selected_font, int(font_size * scale))
+    
+    text_bbox = draw.textbbox((0, 0), char, font=scaled_font)
+    position = (image_size[0] // 2, image_size[1] // 2)
+    
+    draw.text(position, char, font=scaled_font, fill="white", anchor="mm")
+
+    if return_tight_bbox:
+        non_zero_pixels = np.array(image).nonzero()
+        top_left = (max(0, non_zero_pixels[0].min() - 10), max(0, non_zero_pixels[1].min() - 10))
+        bottom_right = (min(image_size[0], non_zero_pixels[0].max() + 10), min(image_size[1], non_zero_pixels[1].max() + 10))
+        image = image.crop((top_left[1], top_left[0], bottom_right[1], bottom_right[0]))
+    else:
+        crop_bbox = (image_size[0] // 32, image_size[1] // 32, 
+                     31 * image_size[0] // 32, 31 * image_size[1] // 32)
+        image = image.crop(crop_bbox)
+
+    image = image.resize(final_image_size)
+    return image
+
+
+def equation_to_image(equation_string, char_images_folder, space_padding=48, output_height=OUTPUT_HEIGHT, 
+                      resize_height_digit=RESIZE_HEIGHT_DIGIT, resize_height_symbol=RESIZE_HEIGHT_SYMBOL, 
+                      width_mult_factors=WIDTH_MULT_FACTORS, use_random_augmentations=True, fonts_pool=None):
+    char_images = []
+    char_widths = []
+    char_fonts = []
+    char_offsets = []
+    
+    all_available_fonts = set(os.path.splitext(file)[0].split('_font_')[1] for file in os.listdir(char_images_folder) if file.startswith('char_'))
+    
+    if fonts_pool is not None:
+        fonts_pool = set(fonts_pool).intersection(all_available_fonts)
+        if not fonts_pool:
+            print("Warning: None of the specified fonts in fonts_pool are available. Using all available fonts.")
+            fonts_pool = all_available_fonts
+    else:
+        fonts_pool = all_available_fonts
+    
+    for char in equation_string:
+        if char == ' ':
+            space_width = space_padding if not use_random_augmentations else max(24, int(space_padding * random.uniform(*width_mult_factors)))
+            space_image = Image.new('L', (space_width, output_height), color=0)
+            char_images.append(space_image)
+            char_widths.append(space_width)
+            char_fonts.append('space')
+            char_offsets.append(0)
+        else:
+            char_name = CHAR_REPLACEMENT_DICT.get(char, char)
+            char_files = [f for f in os.listdir(char_images_folder) 
+                          if f.startswith(f'char_{char_name}_font_') and 
+                          f.split('_font_')[1].split('.')[0] in fonts_pool]
+            
+            if not char_files:
+                char_files = [f for f in os.listdir(char_images_folder) 
+                              if f.startswith(f'char_{char_name}_font_')]
+                if char_files:
+                    print(f"Warning: No image found for character '{char}' ('{char_name}') with the specified fonts. Falling back to all available fonts.")
+            
+            if char_files:
+                chosen_file = random.choice(char_files)
+                img_path = os.path.join(char_images_folder, chosen_file)
+                char_img = Image.open(img_path).convert('L')
+                
+                resize_height = resize_height_digit if char in DIGIT_CHARS else resize_height_symbol if char in SYMBOL_CHARS else resize_height_digit
+                
+                aspect_ratio = char_img.width / char_img.height
+                new_width = int(resize_height * aspect_ratio)
+                if use_random_augmentations:
+                    new_width = int(new_width * random.uniform(*width_mult_factors))
+                char_img_resized = char_img.resize((new_width, resize_height), Image.LANCZOS)
+                
+                full_height_img = Image.new('L', (new_width, output_height), color=0)
+                
+                if char in SYMBOL_CHARS and use_random_augmentations:
+                    offset = random.randint(int(0.25 * (output_height - resize_height)), int(0.75 * (output_height - resize_height)))
+                elif char in DIGIT_CHARS and use_random_augmentations:
+                    offset = random.randint(int(0.05 * (output_height - resize_height)), int(0.95 * (output_height - resize_height)))
+                else:
+                    offset = (output_height - resize_height) // 2
+
+                full_height_img.paste(char_img_resized, (0, offset))
+                
+                char_images.append(full_height_img)
+                char_widths.append(new_width)
+                char_fonts.append(chosen_file.split('_font_')[1].split('.')[0])
+                char_offsets.append(offset)
+            else:
+                print(f"Warning: No image found for character '{char}' ('{char_name}') in any available font.")
+                char_widths.append(0)
+                char_fonts.append('not_found')
+                char_offsets.append(0)
+    
+    total_width = sum(img.width for img in char_images)
+    equation_image = Image.new('L', (total_width, output_height), color=0)
+    
+    x_offset = 0
+    for img in char_images:
+        equation_image.paste(img, (x_offset, 0))
+        x_offset += img.width
+    
+    char_details = {
+        'chars': list(equation_string),
+        'widths': char_widths,
+        'fonts': char_fonts,
+        'offsets': char_offsets
+    }
+    
+    return equation_image, char_details
+
+
+def generate_indicators(char_details):
+    chars = char_details['chars']
+    widths = char_details['widths']
+    fonts = char_details['fonts']
+
+    image_width = sum(widths)
+
+    char_indicators = {}
+    font_indicators = {}
+    section_indicators = {section: np.zeros(image_width, dtype=int) for section in SECTION_ORDER}
+
+    current_position = 0
+    current_section = "argument 1"
+    for char, width, font in zip(chars, widths, fonts):
+        char_indicator = np.zeros(image_width, dtype=int)
+        char_indicator[current_position:current_position + width] = 1
+        
+        if char not in char_indicators:
+            char_indicators[char] = np.zeros(image_width, dtype=int)
+        char_indicators[char] |= char_indicator
+
+        if font not in font_indicators:
+            font_indicators[font] = np.zeros(image_width, dtype=int)
+        font_indicators[font] |= char_indicator
+
+        if char in ['+', '-', '*', '/']:
+            current_section = "operation"
+            section_indicators["symbol"] |= char_indicator
+        elif char == '=':
+            current_section = "equal sign"
+            section_indicators["symbol"] |= char_indicator
+        elif current_section == "equal sign":
+            current_section = "result"
+        elif current_section == "operation":
+            current_section = "argument 2"
+
+        if char.isdigit():
+            section_indicators["digit"] |= char_indicator
+        elif char == ' ':
+            section_indicators["space"] |= char_indicator
+
+        section_indicators[current_section] |= char_indicator
+
+        current_position += width
+
+    space_mask = ~section_indicators["space"].astype(bool)
+    for key in ["argument 1", "argument 2", "result", "operation", "equal sign"]:
+        section_indicators[key] &= space_mask
+
+    return char_indicators, font_indicators, section_indicators
+
+
+def indicators_to_images(char_indicators, font_indicators, section_indicators, 
+                         char_order, section_order, font_order):
+    image_width = len(next(iter(char_indicators.values())))
+    
+    char_array = np.zeros((len(char_order), image_width), dtype=np.int32)
+    font_array = np.zeros((len(font_order) + 1, image_width), dtype=np.int32)
+    section_array = np.zeros((len(section_order), image_width), dtype=np.int32)
+    
+    for i, char in enumerate(char_order):
+        if char in char_indicators:
+            char_array[i] = char_indicators[char]
+    
+    for i, font in enumerate(font_order):
+        if font in font_indicators:
+            font_array[i] = font_indicators[font]
+    
+    other_fonts = set(font_indicators.keys()) - set(font_order)
+    other_indicator = np.zeros(image_width, dtype=np.int32)
+    for font in other_fonts:
+        other_indicator |= font_indicators[font]
+    font_array[-1] = other_indicator
+    
+    for i, section in enumerate(section_order):
+        if section in section_indicators:
+            section_array[i] = section_indicators[section]
+    
+    char_image = Image.fromarray((char_array * 255).astype(np.uint8))
+    font_image = Image.fromarray((font_array * 255).astype(np.uint8))
+    section_image = Image.fromarray((section_array * 255).astype(np.uint8))
+    
+    return char_image, font_image, section_image
+
+
+def generate_equation_descriptions(row, char_details, image_height, image_width):
+    equation_str = row['full string']
+    is_canonical = row['is_canonical']
+    font_usage = row['font_usage']
+    
+    operation_map = {'+': 'addition', '-': 'subtraction', '*': 'multiplication', '/': 'division'}
+    operation = next(op for op in ['+', '-', '*', '/'] if op in equation_str)
+    operation_name = operation_map[operation]
+
+    simple_description = f'An image of size {image_height}x{image_width} of the equation "{equation_str}" (with the {operation_name} operation)'
+    
+    if is_canonical:
+        simple_description += ", the digits and characters are in an aligned canonical form"
+    else:
+        simple_description += ", the digits and characters have varied vertical positions and have non-uniform widths"
+    
+    if font_usage == 'mixed_full' or font_usage == 'mixed_limited':
+        unique_fonts = set(font for font in char_details['fonts'] if font != 'other' and font != 'space' and font != 'not_found')
+        num_unique_fonts = len(unique_fonts)
+        if font_usage == 'mixed_full':
+            simple_description += f", using many different mixed fonts ({num_unique_fonts})"
+        else:
+            simple_description += f", using a limited set of {num_unique_fonts} mixed fonts"
+    else:
+        simple_description += f", using a single font ({font_usage})"
+
+    args = equation_str.split()
+    additional_description = f"First argument has {len(args[0])} digits, "
+    additional_description += f"second argument has {len(args[2])} digits, "
+    additional_description += f"result has {len(args[4])} digits. "
+    
+    section_orig_names = ['argument1', 'operation', 'argument2', 'equal_sign', 'result']
+    section_names_to_use = ['1st argument', 'operation symbol', '2nd argument', 'equal sign', 'result']
+
+    for k, (section, name_to_use) in enumerate(zip(section_orig_names, section_names_to_use)):
+        start = row[f'{section}_start']
+        end = row[f'{section}_end']
+        if k == 0:
+            additional_description += f"{name_to_use} is at timepoints [{start}, {end}], "
+        elif k == len(section_names_to_use) - 1:
+            additional_description += f"and the {name_to_use} at [{start}, {end}]"
+        else:
+            additional_description += f"{name_to_use} is at [{start}, {end}], "
+
+    return simple_description, additional_description
+
+================================================================================
+================================================================================
+sample_images/an_equation_with_segmentation_labels.png:
+=======================================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a visualization of the results of processing an equation image ("583 + 74 = 657").  It's structured vertically into four main sections.
+
+The top section shows the original equation image itself. It's a black background with the equation rendered in white, showing different fonts and styles for the numbers and symbols.
+
+The second section provides "Character Labels." This is a black and white representation where horizontal white bars indicate the temporal extent of each character in the equation.  The x-axis represents time, and the y-axis represents different characters (digits, operators, etc.).
+
+The third section is titled "Section Labels".  Similar to the character labels, it uses horizontal white bars, but these represent higher-level sections within the equation, such as the "argument 1," "operation," "argument 2," "equal sign," and "result" sections.
+
+The final and largest section is labeled "Font Labels." This section uses horizontal white bars to indicate the specific font used for each segment of the equation over time. The y-axis lists a large number of different fonts, and a white bar indicates the detected font for a given time period.  This section likely uses a font identification algorithm, which is why it's so much larger than the other sections.
+
+In summary, the image presents a detailed breakdown of the equation image, analyzing its character composition, structural segmentation, and font usage over time.  The visualization is useful for understanding the results of an OCR or image analysis process.
+
+================================================================================
+================================================================================
+LICENSE.txt:
+============
+MIT License
+
+Copyright (c) 2022 David Beniaguev
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+================================================================================
+sample_images/several_equations_with_description_labels.png:
+============================================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+The image contains six separate images, each displaying a mathematical equation rendered in different fonts and styles.  Each equation is accompanied by descriptive text providing details about its characteristics: the image size, the type of operation (addition, subtraction, multiplication, or division), the number of digits in each argument and the result, and the coordinates of the digits, operation symbols, and equal signs within the image.
+
+The equations themselves are simple arithmetic problems: 70 + 538 = 608, 799 - 219 = 580, 7101 * 0 = 0, 1020 / 204 = 5, 249 + 542 = 791, and 412 * 0 = 0.  The variations in font, size, and positioning of the digits and symbols within each image showcase differences in how the equations might appear in different contexts or using different typesetting methods.
+
+The accompanying text is consistently formatted, providing a structured and detailed analysis of each image's visual properties.  This detailed information, along with the visual display of the equations, suggests the image is likely part of a dataset or documentation used for research or development related to optical character recognition (OCR) or image processing techniques, particularly those dealing with varied font styles and digit positioning.
+
+================================================================================

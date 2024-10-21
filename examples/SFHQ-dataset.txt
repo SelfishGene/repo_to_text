@@ -1,0 +1,644 @@
+================================================================================
+repo title: SFHQ-dataset
+repo link: https://github.com/SelfishGene/SFHQ-dataset
+date processed: 2024-10-21
+================================================================================
+================================================================================
+repo file structure:
+====================
+    README.md
+    explore_dataset.py
+    LICENSE
+    images/
+        SFHQ_variability_age_X_ethnicity_1.jpg
+        bring_to_life_process_paintings.jpg
+        SFHQ_sample_landmarks_segmentation.jpg
+        SFHQ_variability_hair_color.jpg
+        SFHQ_variability_age.jpg
+        SFHQ_sample_2x4.jpg
+        SFHQ_sample_4x8.jpg
+        bring_to_life_process_stable_diffusion.jpg
+        SFHQ_sample_3x6.jpg
+        SFHQ_variability_age_X_ethnicity_2.jpg
+        SFHQ_variability_hair_style.jpg
+        SFHQ_variability_ethnicity.jpg
+        bring_to_life_process_3D_models.jpg
+        SFHQ_variability_expression.jpg
+        SFHQ_sample_1x2.jpg
+================================================================================
+================================================================================
+README.md:
+==========
+# Synthetic Faces High Quality (SFHQ) dataset  
+
+![SFHQ dataset sample images](https://raw.githubusercontent.com/SelfishGene/SFHQ-dataset/main/images/SFHQ_sample_4x8.jpg)
+
+**NOTE**: New higher quality dataset of synthetic faces: [SFHQ-T2I-dataset](https://github.com/SelfishGene/SFHQ-T2I-dataset)
+----
+
+The original SFHQ dataset consists of 4 parts, totaling ~425,000 curated high quality 1024x1024 synthetic face images.  
+It was created by "bringing to life" and turning to photorealistic face images from multiple "inspiration" sources (paintings, drawings, 3D models, text to image generators, etc) using a process similar to what is described [in this short twitter thread](https://twitter.com/DavidBeniaguev/status/1376020024511627273?s=20&t=kH9J5mV9hL8e3y8PruuB5Q). The process involves encoding the images into StyleGAN2 latent space and performing a small manipulation that turns each image into a photo-realistic image. These resulting candidate images are then further curated using a semi-manual semi-automatic process with the help of the lightweight [visual taste aprroximator](https://github.com/SelfishGene/visual_taste_approximator) tool
+
+The dataset also contains facial landmarks (an extended set of 110 landmark points) and face parsing semantic segmentation maps. An example script (`explore_dataset.py`) is provided ([live kaggle notebook here](https://www.kaggle.com/code/selfishgene/explore-synthetic-faces-hq-sfhq-dataset)) and demonstrates how to access landmarks, segmentation maps, and textually search withing the dataset (with CLIP image/text feature vectors), and also performs some exploratory analysis of the dataset.
+
+Example illustation of landmarks and segmentation maps below:  
+![SFHQ dataset landmarks and segmentation](https://raw.githubusercontent.com/SelfishGene/SFHQ-dataset/main/images/SFHQ_sample_landmarks_segmentation.jpg)
+
+## Download
+The dataset can be downloaded via kaggle:
+- [Part 1](https://www.kaggle.com/datasets/selfishgene/synthetic-faces-high-quality-sfhq-part-1) consists of 89,785 HQ 1024x1024 curated face images. It uses "inspiration" images from [Artstation-Artistic-face-HQ dataset (AAHQ)](https://github.com/onion-liu/aahq-dataset), [Close-Up Humans dataset](https://opensynthetics.com/dataset/close-up-humans-dataset-by-synthesis-ai/) and [UIBVFED dataset](http://ugivia.uib.es/uibvfed/).  
+- [Part 2](https://www.kaggle.com/datasets/selfishgene/synthetic-faces-high-quality-sfhq-part-2) consists of 91,361 HQ 1024x1024 curated face images. It uses "inspiration" images from [Face Synthetics dataset](https://github.com/microsoft/FaceSynthetics) and by sampling from the [Stable Diffusion v1.4](https://github.com/CompVis/stable-diffusion) text to image generator using varied face portrait prompts. 
+- [Part 3](https://www.kaggle.com/datasets/selfishgene/synthetic-faces-high-quality-sfhq-part-3) consists of 118,358 HQ 1024x1024 curated face images. It uses "inspiration" images by sampling from [StyleGAN2](https://github.com/NVlabs/stylegan2-ada-pytorch) mapping network with very high truncation psi coefficients to increase diversity of the generation. Here, the [e4e](https://github.com/omertov/encoder4editing) encoder is basically used a new kind of truncation trick.
+- [Part 4](https://www.kaggle.com/datasets/selfishgene/synthetic-faces-high-quality-sfhq-part-4) consists of 125,754 HQ 1024x1024 curated face images. It uses "inspiration" images by sampling from the [Stable Diffusion v2.1](https://github.com/Stability-AI/stablediffusion) text to image generator using varied face portrait prompts. 
+
+
+## More Details about dataset generation and collection
+1. The original inspiration images are taken from:
+    - [Artstation-Artistic-face-HQ Dataset (AAHQ)](https://github.com/onion-liu/aahq-dataset) which contains mainly painting, drawing and 3D models of faces (part 1)
+    - [Close-Up Humans Dataset](https://opensynthetics.com/dataset/close-up-humans-dataset-by-synthesis-ai/) that contains 3D models of faces (part 1)
+    - [UIBVFED Dataset](http://ugivia.uib.es/uibvfed/) that also contain 3D models of faces (part 1)
+    - [Face Synthetics Dataset](https://github.com/microsoft/FaceSynthetics) which contains 3D models of faces (part 2)
+    - generated images using [stable diffusion v1.4 model](https://github.com/CompVis/stable-diffusion) using various face portrait prompts that span a wide range of ethnicities, ages, expressions, hairstyles, etc. (part 2)
+    - StyleGAN2 mapping network sampled with larger that 1 truncation psi values, and then using a new truncation trick in which instead of moving towards the average w_avg vector, we move towards the encoded w_e4e vector to correct the example. illustation is provided in the section below (part 3)
+    - generated images using [stable diffusion v2.1 model](https://github.com/Stability-AI/stablediffusion) using various face portrait prompts that span a wide range of ethnicities, ages, expressions, hairstyles, etc. (part 4)
+1. Each inspiration image was encoded by [encoder4editing (e4e)](https://github.com/omertov/encoder4editing) into [StyleGAN2](https://github.com/NVlabs/stylegan2-ada-pytorch) latent space (StyleGAN2 is a generative face model tained on [FFHQ dataset](https://github.com/NVlabs/ffhq-dataset)) and multiple candidate images were generated from each inspiration image
+1. These candidate images were then further curated and verified as being photo-realistic and high quality by a single human (me) and a machine learning assistant model that was trained to approximate my own human judgments and helped me scale myself to asses the quality of all images in the dataset. The code for the tool used for this purpuse [can be found here](https://github.com/SelfishGene/visual_taste_approximator)
+1. Near duplicates and images that were too similar were removed using CLIP features (no two images in the dataset have CLIP similarity score of greater than ~0.92)
+1. From each image various pre-trained features were extracted and provided here for convenience, in particular CLIP features for fast textual query of the dataset, the feaures are under `pretrained_features/` folder
+1. From each image, semantic segmentation maps were extracted using [Face Parsing BiSeNet](https://github.com/zllrunning/face-parsing.PyTorch) and are provided in the dataset under under `segmentations/` folder
+1. From each image, an extended landmark set was extracted that also contain inner and outer hairlines (these are unique landmarks that are usually not extracted by other algorithms). These landmarks were extracted using [Dlib](https://github.com/davisking/dlib), [Face Alignment](https://github.com/1adrianb/face-alignment) and some post processing of [Face Parsing BiSeNet](https://github.com/zllrunning/face-parsing.PyTorch) and are provided in the dataset under `landmarks/` folder
+1. NOTE: semantic segmentation and landmarks were first calculated on scaled down version of 256x256 images, and then upscaled to 1024x1024
+
+Example of dataset generation process on artistic illustations and paintings taken from [AAHQ](https://github.com/onion-liu/aahq-dataset) (part 1):  
+![SFHQ dataset paintings](https://raw.githubusercontent.com/SelfishGene/SFHQ-dataset/main/images/bring_to_life_process_paintings.jpg)
+
+Example of dataset generation process on 3D models taken from [Face Synthetics](https://github.com/microsoft/FaceSynthetics), [Close-Up Humans](https://opensynthetics.com/dataset/close-up-humans-dataset-by-synthesis-ai/), and [UIBVFED](http://ugivia.uib.es/uibvfed/) (parts 1 & 2):  
+![SFHQ dataset 3D models](https://raw.githubusercontent.com/SelfishGene/SFHQ-dataset/main/images/bring_to_life_process_3D_models.jpg)
+
+Example of dataset generation process of correcting faults in face images generated by [Stable Diffusion](https://github.com/CompVis/stable-diffusion) (parts 2 & 4):  
+![SFHQ dataset stable diffusion](https://raw.githubusercontent.com/SelfishGene/SFHQ-dataset/main/images/bring_to_life_process_stable_diffusion.jpg)
+
+Example of dataset generation process of using the StyleGAN2 mapping network samples with high truncation psi and correcting with e4e encoder (part 3):  
+![SFHQ dataset encoder based truncation](https://i.ibb.co/NT7BJy5/Figure-1-brief-stages-psi-08-to-20-1.jpg)
+
+
+## Demonstation of variability in the dataset 
+we deomonstate the variability of the images in the dataset by textual query of the dataset with [CLIP](https://github.com/openai/CLIP) ViT-L/14@336 model embeddings (NOTE: these demonstation images are only of parts 1&2, the dataset with parts 3&4 is much more varied, please try out for yourself or check the [script on kaggle](https://www.kaggle.com/code/selfishgene/explore-synthetic-faces-hq-sfhq-dataset-2)):  
+- Hair color:  
+![SFHQ dataset variability haircolor](https://raw.githubusercontent.com/SelfishGene/SFHQ-dataset/main/images/SFHQ_variability_hair_color.jpg)
+
+- Age:  
+![SFHQ dataset variability age](https://raw.githubusercontent.com/SelfishGene/SFHQ-dataset/main/images/SFHQ_variability_age.jpg)
+
+- Ethnicity:  
+![SFHQ dataset variability ethnicity](https://raw.githubusercontent.com/SelfishGene/SFHQ-dataset/main/images/SFHQ_variability_ethnicity.jpg)
+
+- Facial expression:  
+![SFHQ dataset variability expression](https://raw.githubusercontent.com/SelfishGene/SFHQ-dataset/main/images/SFHQ_variability_expression.jpg)  
+
+Additional variability demonstations can be found under `images/`
+
+## Privacy
+Since all images in this dataset are synthetically generated there are no privacy issues or license issues surrounding these images.  
+
+## Summary
+Overall the 4 parts of this dataset contain ~425,000 high quality and curated synthetic face images that have no privacy issues or license issues surrounding them.  
+
+This dataset contains a high degree of variability on the axes of identity, ethnicity, age, pose, expression, lighting conditions, hair-style, hair-color, facial hair. It lacks variability in accessories axes such as hats or earphones as well as various jewelry. It also doesn't contain any occlusions except the self-occlusion of hair occluding the forehead, the ears and rarely the eyes. This dataset naturally inherits all the biases of it's original datasets (FFHQ, AAHQ, Close-Up Humans, Face Synthetics, LAION-5B) and the StyleGAN2 and Stable Diffusion models.  
+
+The purpose of this dataset is to be of sufficiently high quality that new machine learning models can be trained using this data alone or provide meaningful augmentation to other data sources, including the training of generative face models such as StyleGAN. The dataset may be extended from time to time with additional supervision labels (e.g. text descriptions), but no promises.
+
+Hope this is helpful to some of you, feel free to use as you see fit...
+
+## Citation
+
+```
+@misc{david_beniaguev_2022_SFHQ,
+	title={Synthetic Faces High Quality (SFHQ) dataset},
+	url={https://github.com/SelfishGene/SFHQ-dataset},
+	DOI={10.34740/kaggle/dsv/4737549},
+	publisher={GitHub},
+	author={David Beniaguev},
+	year={2022}
+}
+```
+
+
+
+================================================================================
+================================================================================
+images/SFHQ_variability_age_X_ethnicity_2.jpg:
+==============================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image showcases a grid of 144 photographs, each depicting a different synthetically generated image of an African male at various ages and life stages. The images are arranged in a 12x12 grid.  Each row presents a specific age group, starting from infancy ("10 month old baby") and progressing through toddlerhood, childhood, teenage years, adulthood, and finally, old age ("wrinkly 70 year old senior").  Within each row, there are twelve variations of the same age group, showing slight differences in facial features, hair, and expression.  This suggests the images are generated from a model that produces diverse instances within each age category.
+
+Above the grid, a title indicates that this is a demonstration of image textual search using CLIP (Contrastive Language–Image Pre-training) features. The text "prefix_text = "african male"" specifies that the search is specifically targeting images of African males.  This implies the images were created and organized for testing the efficacy of CLIP's image-text matching capabilities within a particular demographic.
+
+The overall structure and content of the image suggest a study or experiment related to AI-generated images, age progression, and the accuracy of CLIP's image search functionality for diverse populations. The consistency of the "African male" label across all images emphasizes the focus on this specific demographic in the image generation and retrieval process.
+
+================================================================================
+================================================================================
+images/SFHQ_sample_1x2.jpg:
+===========================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a diptych, meaning it's divided into two distinct halves, presented side-by-side. 
+
+
+The left half features a close-up portrait of an older Asian man with graying dark hair, parted to the side. His expression is one of a gentle smile. The skin on his face shows the texture and lines typical of aging. He's wearing a simple, dark gray or brown collared shirt. The background is a muted beige tone, which is out of focus, drawing attention to the subject.
+
+
+The right half shows a close-up portrait of a younger man of Middle Eastern or Hispanic descent with short, dark hair. He has a broad, bright smile revealing his teeth. His skin is smooth, and his expression is friendly and open. He's wearing a dark blue collared shirt. The background is an out-of-focus, purplish hue.
+
+
+The overall contrast between the two images is striking, highlighting the age difference and different ethnicities of the two individuals. Both portraits are well-lit and sharply focused on their faces, suggesting a professional or studio setting for the photographs.  At the very top of each half is small text, likely file information.
+
+================================================================================
+================================================================================
+explore_dataset.py:
+===================
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import PIL
+import glob
+import clip
+import torch
+import pickle
+import matplotlib
+
+#%% display random subset of images from sample images
+
+
+datasets_root_folder = '/home/Datasets/' # change to where dataset was downloaded
+
+dataset_path_part_1 = os.path.join(datasets_root_folder, 'SFHQ_part1')
+dataset_path_part_2 = os.path.join(datasets_root_folder, 'SFHQ_part2')
+
+display_background_color = '0.05'
+text_color = '1.0'
+title_fontsize = 16
+
+matplotlib.rcParams['text.color'] = text_color
+matplotlib.rcParams['font.size'] = title_fontsize
+
+dataset_part_to_choose = np.random.choice([1, 2])
+
+if dataset_part_to_choose == 1:
+    dataset_path = dataset_path_part_1
+    sample_images_tiny_folder  = os.path.join(dataset_path, 'tiny sample (30 images)')
+    sample_images_small_folder = os.path.join(dataset_path, 'small sample (550 images)')
+elif dataset_part_to_choose == 2:
+    dataset_path = dataset_path_part_2
+    sample_images_tiny_folder  = os.path.join(dataset_path, 'a tiny sample (140 images)')
+    sample_images_small_folder = os.path.join(dataset_path, 'a small sample (650 images)')
+
+all_images_folder          = os.path.join(dataset_path, 'images')
+pretrained_features_folder = os.path.join(dataset_path, 'pretrained_features')
+landmarks_folder           = os.path.join(dataset_path, 'landmarks')
+segmentations_folder       = os.path.join(dataset_path, 'segmentations')
+
+num_rows = 4
+num_cols = 8
+num_images = num_rows * num_cols
+title_fontsize = 16
+
+if num_images <= 30:
+    sample_image_filenames = glob.glob(os.path.join(sample_images_tiny_folder, '*.jpg'))
+else:
+    sample_image_filenames = glob.glob(os.path.join(sample_images_small_folder, '*.jpg'))
+
+selected_images = np.random.choice(sample_image_filenames, size=num_images, replace=False)
+
+plt.close('all')
+fig = plt.figure(figsize=(40,30))
+fig.patch.set_facecolor(display_background_color)
+fig.subplots_adjust(left=0.003, right=0.997, bottom=0.003, top=0.99, hspace=0.02, wspace=0.02)
+for k, curr_image_filename in enumerate(selected_images):
+    curr_image = PIL.Image.open(curr_image_filename).convert("RGB")
+
+    plt.subplot(num_rows, num_cols, k + 1); plt.imshow(curr_image); plt.axis('off')
+    plt.title('image "%s"' %(curr_image_filename.split('/')[-1].split('.')[0]), fontsize=title_fontsize)
+
+
+#%% display random subset of images from the data along with their landmarks
+
+num_images_to_show = 6
+
+num_rows = 3
+num_cols = num_images_to_show
+
+sample_image_filenames = glob.glob(os.path.join(all_images_folder, '*.jpg'))
+selected_images = np.random.choice(sample_image_filenames, size=num_images_to_show, replace=False)
+
+title_fontsize = 16
+
+plt.close('all')
+fig = plt.figure(figsize=(40,30))
+fig.patch.set_facecolor(display_background_color)
+plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.98, hspace=0.03, wspace=0.04)
+for k, curr_image_filename in enumerate(selected_images):
+
+    curr_sample_name = curr_image_filename.split('/')[-1].split('.')[0]
+
+    curr_image_filename = os.path.join(all_images_folder, curr_sample_name + '.jpg')
+    curr_landmarks_filename = os.path.join(landmarks_folder, curr_sample_name + '.npz')
+    curr_segmentation_filename = os.path.join(segmentations_folder, curr_sample_name + '.png')
+
+    curr_image = PIL.Image.open(curr_image_filename).convert("RGB")
+    curr_landmarks = np.load(curr_landmarks_filename)['landmarks']
+    # curr_segmentation = imageio.imread(curr_segmentation_filename)
+    curr_segmentation = PIL.Image.open(curr_segmentation_filename).convert("L")
+
+    plt.subplot(num_rows, num_cols, k + 1 + 0 * num_cols)
+    plt.imshow(curr_image); plt.axis('off')
+    plt.title('image "%s"' %(curr_sample_name), fontsize=title_fontsize)
+
+    plt.subplot(num_rows, num_cols, k + 1 + 1 * num_cols)
+    plt.imshow(curr_image); plt.axis('off')
+    plt.scatter(curr_landmarks[:,0],curr_landmarks[:,1], c='r')
+    plt.title('image with landmarks overlayed', fontsize=title_fontsize)
+
+    plt.subplot(num_rows, num_cols, k + 1 + 2 * num_cols)
+    plt.imshow(curr_segmentation); plt.axis('off')
+    plt.scatter(curr_landmarks[:,0],curr_landmarks[:,1], c='r')
+    plt.title('segmentation mask with landmarks overlayed', fontsize=title_fontsize)
+
+
+#%% demonstate segmentation overlay
+
+num_images_to_show = 4
+num_cols = 8
+num_rows = num_images_to_show
+
+sample_image_filenames = glob.glob(os.path.join(all_images_folder, '*.jpg'))
+sample_image_filenames = glob.glob(os.path.join(sample_images_small_folder, '*.jpg'))
+selected_images = np.random.choice(sample_image_filenames, size=num_images_to_show, replace=False)
+
+darkening_mult_factor = 0.35
+title_fontsize = 18
+
+plt.close('all')
+fig = plt.figure(figsize=(40,30))
+fig.patch.set_facecolor(display_background_color)
+plt.subplots_adjust(left=0.01, right=0.99, bottom=0.02, top=0.98, hspace=0.04, wspace=0.03)
+for k, curr_image_filename in enumerate(selected_images):
+    curr_sample_name = curr_image_filename.split('/')[-1].split('.')[0]
+
+    curr_image_filename = os.path.join(all_images_folder, curr_sample_name + '.jpg')
+    curr_segmentation_filename = os.path.join(segmentations_folder, curr_sample_name + '.png')
+
+    curr_image = np.array(PIL.Image.open(curr_image_filename).convert("RGB"))
+    curr_segmentation = np.array(PIL.Image.open(curr_segmentation_filename).convert("L"))
+
+    only_face = (curr_segmentation >= 1) & (curr_segmentation <= 13)
+    edited_face_1 = curr_image.copy()
+    edited_face_1[~only_face] = darkening_mult_factor * edited_face_1[~only_face]
+
+    only_face_skin = (curr_segmentation == 1)
+    edited_face_2 = curr_image.copy()
+    edited_face_2[~only_face_skin] = darkening_mult_factor * edited_face_2[~only_face_skin]
+
+    only_face_parts = (curr_segmentation > 1) & (curr_segmentation <= 13)
+    edited_face_3 = curr_image.copy()
+    edited_face_3[~only_face_parts] = darkening_mult_factor * edited_face_3[~only_face_parts]
+
+    only_background_neck_and_shirt = (curr_segmentation == 0) | ((curr_segmentation >= 14) & (curr_segmentation <= 16))
+    edited_face_4 = curr_image.copy()
+    edited_face_4[only_background_neck_and_shirt] = darkening_mult_factor * edited_face_4[only_background_neck_and_shirt]
+
+    only_hair_and_hats = (curr_segmentation >= 17)
+    edited_face_5 = curr_image.copy()
+    edited_face_5[~only_hair_and_hats] = darkening_mult_factor * edited_face_5[~only_hair_and_hats]
+
+    only_background_neck_and_shirt = (curr_segmentation == 0) | ((curr_segmentation >= 14) & (curr_segmentation <= 16))
+    edited_face_6 = curr_image.copy()
+    edited_face_6[~only_background_neck_and_shirt] = darkening_mult_factor * edited_face_6[~only_background_neck_and_shirt]
+
+    plt.subplot(num_rows, num_cols, k * num_cols + 1); plt.imshow(curr_image); plt.axis('off'); plt.title('original "%s"' %(curr_sample_name), fontsize=title_fontsize)
+    plt.subplot(num_rows, num_cols, k * num_cols + 2); plt.imshow(curr_segmentation); plt.axis('off'); plt.title('face parsing', fontsize=title_fontsize)
+    plt.subplot(num_rows, num_cols, k * num_cols + 3); plt.imshow(edited_face_1); plt.axis('off'); plt.title('face only', fontsize=title_fontsize)
+    plt.subplot(num_rows, num_cols, k * num_cols + 4); plt.imshow(edited_face_2); plt.axis('off'); plt.title('skin only', fontsize=title_fontsize)
+    plt.subplot(num_rows, num_cols, k * num_cols + 5); plt.imshow(edited_face_3); plt.axis('off'); plt.title('face parts', fontsize=title_fontsize)
+    plt.subplot(num_rows, num_cols, k * num_cols + 6); plt.imshow(edited_face_4); plt.axis('off'); plt.title('face and hair', fontsize=title_fontsize)
+    plt.subplot(num_rows, num_cols, k * num_cols + 7); plt.imshow(edited_face_5); plt.axis('off'); plt.title('hair and hats only', fontsize=title_fontsize)
+    plt.subplot(num_rows, num_cols, k * num_cols + 8); plt.imshow(edited_face_6); plt.axis('off'); plt.title('background, neck and shirt', fontsize=title_fontsize)
+
+
+#%% gather all CLIP ViT/14 @ 336 embeddings into a single matrix
+
+
+def collect_pretrained_features_from_folder(base_image_folder, requested_features_model='CLIP_ViTL_14@336', nromalize_features=True):
+    # this function assumes that the folder stucture is proper and features dict contains the requested features
+
+    images_folder = os.path.join(base_image_folder, 'images')
+    features_folder = os.path.join(base_image_folder, 'pretrained_features')
+    all_feature_dict_filenames = glob.glob(os.path.join(features_folder, '*.pickle'))
+    all_image_filenames = glob.glob(os.path.join(images_folder, '*.*'))
+
+    try:
+        curr_features_dict = pickle.load(open(all_feature_dict_filenames[0], "rb"))
+        num_features = curr_features_dict[requested_features_model].shape[1]
+    except:
+        print('the requested features were not calculated.')
+        return [],[]
+
+    num_images = len(all_feature_dict_filenames)
+
+    # create matrix to fill
+    pretrained_image_features_matrix = np.zeros((num_images, num_features))
+
+    # go over all samples and collect the features
+    image_filename_map = {}
+    for k, curr_image_filename in enumerate(all_image_filenames):
+        curr_sample_name = curr_image_filename.split('/')[-1].split('.')[0]
+        curr_features_dict_filename = os.path.join(features_folder, curr_sample_name + '.pickle')
+        curr_features_dict = pickle.load(open(curr_features_dict_filename, "rb"))
+        pretrained_image_features_matrix[k,:] = curr_features_dict[requested_features_model]
+        image_filename_map[k] = curr_image_filename
+
+    # normalize features to unit norm
+    if nromalize_features:
+        pretrained_image_features_matrix /= np.linalg.norm(pretrained_image_features_matrix, axis=1, keepdims=True)
+
+    return pretrained_image_features_matrix, image_filename_map
+
+
+# extract features for all filenames from two parts of the dataset
+CLIP_image_features_pt1, image_filename_map_pt1 = collect_pretrained_features_from_folder(dataset_path_part_1, requested_features_model='CLIP_ViTL_14@336', nromalize_features=True)
+CLIP_image_features_pt2, image_filename_map_pt2 = collect_pretrained_features_from_folder(dataset_path_part_2, requested_features_model='CLIP_ViTL_14@336', nromalize_features=True)
+
+# merge the image features and filenames from both datasets for simple querying
+CLIP_image_features = np.concatenate((CLIP_image_features_pt1, CLIP_image_features_pt2), axis=0)
+image_filename_map = image_filename_map_pt1.copy()
+for k in range(CLIP_image_features_pt2.shape[0]):
+    image_filename_map[CLIP_image_features_pt1.shape[0] + k] = image_filename_map_pt2[k]
+
+# load the clip model
+device = "cuda" if torch.cuda.is_available() else "cpu"
+CLIP_model, CLIP_preprocess = clip.load("ViT-L/14@336px", device=device)
+
+
+#%% make some textual searches
+
+
+# please uncomment desired queries (or just make up some of your own)
+
+
+# hair related (color x style)
+text_prefix = ''
+text_strings = ['white or gray hair', 'yellow or blond hair', 'green hair', 'blue hair', 'purple or pink hair', 'red or orange hair']
+
+# text_prefix = 'woman with '
+# text_strings = ['short blond hair', 'long blond hair', 'short red hair', 'long red hair', 'short black hair', 'long black hair']
+
+# text_prefix = ''
+# text_strings = ['straight hair', 'curly hair', 'high top hairstyle', 'bob-cut hairstyle', 'afro hairstyle']
+
+
+# various random properties
+# text_prefix = 'woman '
+# text_strings = ['heavy makeup', 'without makeup', 'red lipstick', 'strong eyeliner']
+
+# text_prefix = ''
+# text_strings = ['yellow background', 'green background', 'blue background', 'purple background', 'red background']
+
+# text_prefix = ''
+# text_strings = ['reading glasses', 'sunglasses', 'bald', 'goatee', 'lipstick']
+
+# text_prefix = ''
+# text_strings = ['large or chiseled jaw', 'long white beard', 'fashionable beard', 'long forehead', 'overweight or chubby']
+
+
+# expression
+# text_prefix = ''
+# text_strings = ['angry or enraged', 'surprised', 'smiling', 'sad or depressed', 'grim face']
+
+# text_prefix = 'man '
+# text_strings = ['angry or enraged', 'surprised', 'smiling', 'sad or depressed', 'grim face']
+
+
+# ethnicity (with age cross)
+# text_prefix = ''
+# text_strings = ['asian', 'indian', 'african', 'persian', 'south-american', 'irish']
+
+# text_prefix = 'old age '
+# text_strings = ['asian', 'indian', 'african', 'persian', 'south-american', 'irish']
+
+# text_prefix = 'typical adult '
+# text_strings = ['asian', 'indian', 'african', 'persian', 'south-american', 'irish']
+
+# text_prefix = 'young child '
+# text_strings = ['asian', 'indian', 'african', 'persian', 'south-american', 'irish']
+
+
+# age (with ethnicity cross)
+# text_prefix = ''
+# text_strings = ['10 month old baby', '2.5 year old toddler', 'small child', '16 year old teenager', '30 year old adult', 'wrinkly 70 year old senior']
+
+# text_prefix = 'asian female '
+# text_strings = ['10 month old baby', '2.5 year old toddler', 'small child', '16 year old teenager', '30 year old adult', 'wrinkly 70 year old senior']
+
+# text_prefix = 'african male '
+# text_strings = ['10 month old baby', '2.5 year old toddler', 'small child', '16 year old teenager', '30 year old adult', 'wrinkly 70 year old senior']
+
+
+# will randomly display "num_top_images_to_show" among the top "num_top_image_candidates" best matching queries
+num_top_images_to_show = 2 * len(text_strings) + 1
+num_top_image_candidates = int(3 * num_top_images_to_show)
+
+title_fontsize = 14
+
+# attach prefix and extract text features
+text_strings_full = [(text_prefix + x) for x in text_strings]
+tokenized_text_samples = torch.cat([clip.tokenize(text_strings_full)]).cuda()
+CLIP_text_features = CLIP_model.encode_text(tokenized_text_samples).detach().cpu().numpy()
+CLIP_text_features /= np.linalg.norm(CLIP_text_features, axis=1, keepdims=True) # normalize to unit norm
+
+# perform inner product to get image-text similarity score
+image_text_similarity  = np.dot(CLIP_image_features , CLIP_text_features.T)
+
+num_rows = len(text_strings)
+num_cols = num_top_images_to_show
+
+plt.close('all')
+fig, ax = plt.subplots(nrows=num_rows, ncols=num_cols, figsize=(40, 32))
+fig.patch.set_facecolor(display_background_color)
+fig.subplots_adjust(left=0.003,right=0.997,bottom=0.01,top=0.925,hspace=0.13,wspace=0.03)
+fig.suptitle('image textual search using CLIP features from synthetic dataset \nprefix_text = "%s"' %(text_prefix), fontsize=25)
+for row_ind, q_str in enumerate(text_strings):
+
+    # get top "num_top_image_candidates" matching queries sorted from best matching downward
+    query_best_inds = list(np.argsort(image_text_similarity[:,row_ind])[-num_top_image_candidates:])
+    query_best_inds.reverse()
+    # randomly select "num_top_images_to_show" from that list
+    query_best_inds = np.random.choice(query_best_inds, size=num_top_images_to_show, replace=False)
+
+    for col_ind in range(num_cols):
+        curr_image = PIL.Image.open(image_filename_map[query_best_inds[col_ind]]).convert("RGB")
+        ax[row_ind,col_ind].imshow(curr_image); ax[row_ind,col_ind].set_axis_off()
+        ax[row_ind,col_ind].set_title("'%s'" %(q_str), fontsize=title_fontsize)
+
+
+#%%
+
+
+
+================================================================================
+================================================================================
+images/SFHQ_sample_4x8.jpg:
+===========================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+The image is a grid of 40 small, square images, arranged in 4 rows and 10 columns. Each square contains a close-up headshot of a different person.  The individuals depicted are diverse in age, gender, ethnicity, and hairstyle. There is a wide range of skin tones and facial features represented. The background behind each person is simple and uncluttered, focusing attention on the individual's face.
+
+Above each individual image is a short text string that appears to be a file name or identifier, suggesting that these are images from a dataset. The consistent format of these identifiers ("SFHQ_pt[1 or 2]_0000[number]") implies a systematic organization of the images.  The overall style of the images suggests a potential use in machine learning, facial recognition, or other applications requiring a large and diverse set of human faces.  The images appear digitally enhanced or processed, giving them a slightly artificial or smoothed look.
+
+================================================================================
+================================================================================
+images/bring_to_life_process_paintings.jpg:
+===========================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a grid of 18 portrait images arranged in three rows of six.  The top row displays six original "inspiration" images; these are diverse portraits of individuals with varying hair colors, skin tones, and styles.  They range from realistic painted portraits to stylized digital paintings and illustrations.
+
+The two rows below the top row show photorealistic renderings generated from the inspiration images.  Each column represents a different original image from the top row, and the second and third rows contain two versions of each image generated using different parameters, labeled "photoreal candidate 1, e4e_strict_prior" and "photoreal candidate 2, ie4e_low_prior" respectively. These labels suggest that the image generation process used different models or settings to produce the two sets of results.  The generated images attempt to recreate the style and features of the original "inspiration" pictures, but with variations in detail, lighting, and overall appearance. The differences illustrate how parameters in AI image generation can lead to varying results.
+
+================================================================================
+================================================================================
+images/SFHQ_variability_expression.jpg:
+=======================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image displays a grid of 120 face images, organized into ten rows of twelve columns. Each face image is accompanied by text indicating the query used to retrieve it. The queries are emotion-related, including "angry or enraged", "surprised", "smiling", "sad or depressed", and "grim face".  The faces in each column represent the results for a particular query.  The images themselves appear to be computer-generated, showcasing a diverse range of ages, genders, and ethnicities.  The background is a consistent dark gray, making the faces stand out clearly.
+
+The title of the image, "image textual search using CLIP features from synthetic dataset prefix_text = ''", indicates that the images are from a synthetic dataset and were retrieved using a CLIP (Contrastive Language–Image Pre-training) model. This explains how the model linked textual descriptions to visual representations of facial expressions.  The consistent use of the same queries across the rows suggests an attempt to test the model's robustness and consistency in retrieving images matching the specified emotional states or facial expressions.
+
+The overall structure is highly organized and systematic, presenting a clear visualization of a text-to-image retrieval experiment.  The consistent labeling and layout make it easy to compare the results for each query and assess the performance of the CLIP model.
+
+================================================================================
+================================================================================
+images/bring_to_life_process_stable_diffusion.jpg:
+==================================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a grid of 18 photos arranged in three rows of six columns.  Each column represents a different individual, and each row represents a different image generation stage or technique. 
+
+The top row shows the "original inspiration" images – six diverse faces of varying ages, ethnicities, and genders. These appear to be real photographs used as source material for image generation.
+
+The second and third rows display the results of two different photorealistic image generation methods (or "candidates"). Candidate 1 ("e4e_strict_prior") and Candidate 2 ("ie4e_low_prior") each generate a version of the six original faces.  The generated images attempt to replicate the original photos but show subtle differences in style, detail, and realism.  The differences likely reflect variations in the algorithms or parameters used during the generation process.  The differences between the two candidates are not immediately striking but are present in fine details of facial features and skin texture.
+
+================================================================================
+================================================================================
+images/SFHQ_sample_2x4.jpg:
+===========================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+The image is a grid of eight photographs, arranged in two rows of four. Each photograph is a close-up portrait of a person's face, filling the entire frame. 
+
+
+The subjects are diverse in age, gender, and ethnicity. There are older adults, younger adults, and a child. The ethnicities represented appear to include East Asian, Caucasian, African, and mixed-race individuals. The subjects’ expressions vary, ranging from neutral to smiling. Each photograph has a caption at the top that appears to be a file name or identifier.
+
+
+The overall impression is one of diversity and a focus on individual facial features and expressions. The consistent framing and close-up nature of the photos create a uniform visual style.
+
+================================================================================
+================================================================================
+images/SFHQ_variability_hair_color.jpg:
+=======================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image showcases the results of an image textual search using CLIP (Contrastive Language–Image Pre-training) features from a synthetic dataset.  The top of the image displays the title "image textual search using CLIP features from synthetic dataset" and indicates that the `prefix_text` variable is set to an empty string.
+
+The main body of the image is a grid of 132 small images, organized into 12 rows of 11 columns. Each row represents a different hair color query: "white or gray hair," "yellow or blond hair," "green hair," "blue hair," "purple or pink hair," and "red or orange hair." Within each row, the 11 images are the results returned by the CLIP search for that particular hair color query.  The images depict diverse individuals, varying in age, gender, and ethnicity, all seemingly generated synthetically.  Each image is labeled above it with the relevant query, making it clear which search term produced each image result.
+
+The structure is highly organized and methodical, presenting a clear visual representation of how the CLIP model performs image retrieval based on textual descriptions of hair color. The synthetic nature of the dataset allows for a controlled experiment to assess the effectiveness of the CLIP search.
+
+================================================================================
+================================================================================
+images/SFHQ_sample_3x6.jpg:
+===========================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a grid of 20 individual portraits, arranged in four rows of five images each.  Each portrait shows a different person, displaying a wide range of ages, ethnicities, and genders.  The individuals are presented in a fairly consistent manner, with most images showing a head-and-shoulders shot against a plain or slightly textured background.  There's a diverse representation of skin tones, hair colors, and facial features. The expressions are generally neutral or slightly pleasant, with minimal variation in posing.
+
+Above each portrait, a small text label is visible, seemingly identifying the image with a file name or similar identifier.  The identifiers suggest some sort of database or collection of images, possibly for facial recognition or similar purposes. The consistency of the labels and the uniformity of the image presentation reinforce the impression of a systematic organization of the images.  The overall effect is that of a diverse and well-organized dataset of facial images.
+
+================================================================================
+================================================================================
+images/SFHQ_variability_hair_style.jpg:
+=======================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image showcases the results of an image textual search using the CLIP (Contrastive Language–Image Pre-training) model.  The search was performed on a synthetic dataset, and the title indicates that a prefix text was used, although the specific prefix is not shown. The image is organized into a grid of small square images, each displaying a face.
+
+Each row of images represents a different search query related to hairstyles.  The queries are clearly labeled above each row: "straight hair," "curly hair," "high top hairstyle," "bob-cut hairstyle," and "afro hairstyle."  Within each row, multiple images are presented, showing a variety of faces with the specified hairstyle, demonstrating the model's ability to retrieve relevant results based on the textual description.  The diversity of faces within each row also suggests that the dataset contains a range of ethnicities and genders.  The consistent sizing and arrangement of the images make the results easy to compare and analyze.
+
+================================================================================
+================================================================================
+images/SFHQ_variability_age.jpg:
+================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a grid showcasing the results of an image textual search using CLIP (Contrastive Language–Image Pre-training) features.  The search was performed on a synthetic dataset of images. The top of the image displays the title "image textual search using CLIP features from synthetic dataset" and indicates that the search was conducted using the prefix text "".
+
+The grid itself is organized into rows and columns. Each cell contains a face image of a person, and above each image is a text label describing the person's age and life stage (e.g., "10 month old baby," "2.5 year old toddler," "16 year old teenager," "30 year old adult," "wrinkly 70 year old senior"). The images within each row seem to represent variations in the same age group or life stage, showing diverse ethnicities and facial features.  The age groups progress from infancy to seniorhood across the rows.
+
+The overall structure is designed to demonstrate the effectiveness of the CLIP model's ability to retrieve relevant images based on textual descriptions.  The use of a synthetic dataset likely allows for a controlled experiment, eliminating variability from real-world image quality and annotation inconsistencies.
+
+================================================================================
+================================================================================
+images/SFHQ_sample_landmarks_segmentation.jpg:
+==============================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a grid showcasing six sets of three images each, arranged in three rows.  Each set focuses on a different individual's face. The first row presents the original facial images.  The second row displays the same faces but with red dots overlaid, indicating detected facial landmarks.  These landmarks are likely used for facial recognition or analysis purposes, showing key points like the eyes, nose, and mouth.  The third row presents a segmented version of the faces.  The segmentation process separates the image into regions representing different parts of the face (hair, skin, clothing), resulting in a color-coded representation, and retains the landmarks from the previous row.  The color scheme of the segmentation varies slightly between images, but generally uses a purple, yellow, and teal palette.
+
+The top row of images shows a variety of individuals with diverse ethnic backgrounds, ages, and hairstyles, suggesting a dataset designed to be representative and robust in its scope.  Each original image in the top row has a filename associated with it, implying that this is part of a larger collection of images.  The consistent application of landmark detection and segmentation across all six sets highlights the process's effectiveness.
+
+
+Overall, the image provides a clear visual demonstration of facial landmark detection and segmentation.  It is likely a sample output from a computer vision algorithm or a part of a research paper illustrating its capabilities in handling diverse facial features and creating accurate facial masks.
+
+================================================================================
+================================================================================
+images/bring_to_life_process_3D_models.jpg:
+===========================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image is a grid of 18 photos arranged in three rows of six columns. Each column represents a different person, and each row shows different versions of the same person's face. The top row displays the "original inspiration" images—presumably the source images used to generate the faces in the rows below.  These images vary in style, showing both photographs and what appears to be 3D rendered faces.
+
+The second and third rows show the results of a photorealistic face generation process.  Each column shows two variations of a generated face for the same individual inspiration image. The labels below each row indicate that the second row ("photoreal candidate 1") uses a "strict prior" in the generation process, while the third row ("photoreal candidate 2") employs a "low prior".  This suggests that the generation algorithm used different levels of constraint or guidance when creating these faces.  The differences between the "strict prior" and "low prior" results can be seen in subtle variations in facial features and overall appearance for each person.  The "strict prior" versions appear closer to the original inspiration images, while the "low prior" versions exhibit more variation.
+
+================================================================================
+================================================================================
+images/SFHQ_variability_age_X_ethnicity_1.jpg:
+==============================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image displays a grid of 144 individual photographs, meticulously arranged in 12 rows and 12 columns. Each photograph features a headshot of a woman, seemingly of Asian descent, at different ages and stages of life.  The age range is extensive, progressing from infancy (10-month-old babies) through toddlerhood (2.5 years old), childhood ("small child"), adolescence (16-year-old teenagers), adulthood (30-year-old adults), and finally, old age ("wrinkly 70-year-old seniors").  Each image is labeled with the corresponding age description.
+
+The consistent framing and lighting across all photographs create a uniform and organized visual presentation. The background of each individual image is relatively simple and uncluttered, focusing attention on the subject's face.  The arrangement suggests a systematic study or dataset of facial features across the lifespan, possibly used for research in areas like age estimation, facial recognition, or image generation.  The title indicates the images were generated synthetically and the textual search was performed using CLIP features.
+
+================================================================================
+================================================================================
+images/SFHQ_variability_ethnicity.jpg:
+======================================
+Description of the following image by models/gemini-1.5-flash-002, performed on 2024-10-21:
+Here's a description of the image:
+
+The image presents a grid of 144 face images, neatly organized into 12 rows and 12 columns. Each face image is square and shows a diverse range of individuals, seemingly generated synthetically.  Above each column, a label indicates the ethnicity associated with the faces in that column. The labels are: 'asian', 'indian', 'african', 'persian', 'south-american', and 'irish'.  Each ethnicity is represented by 24 faces.
+
+The title of the image indicates that the images are the result of an image textual search using CLIP (Contrastive Language–Image Pre-training) features from a synthetic dataset. The search query was "typical adult", aiming to retrieve images representing a typical adult from each of the specified ethnic groups. The faces in the image are diverse in age, hair style, and facial features, representing a broad range within each ethnic category.  The consistent lighting and background suggest a controlled, likely artificial, environment for image generation.
+
+================================================================================
