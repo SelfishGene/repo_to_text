@@ -1,0 +1,1016 @@
+================================================================================
+repo title: a_chatgpt_never_forgets
+repo link: https://github.com/SelfishGene/a_chatgpt_never_forgets
+date processed: 2024-10-21
+================================================================================
+================================================================================
+repo file structure:
+====================
+    long_term_memory_manager.py
+    README.md
+    requirement.txt
+    api_key
+    LICENSE
+    chatgpt_with_long_term_memory.py
+    prompt_utils.py
+    memories_David/
+        mem__14_03_2023_Tuesday_23:33__len_6.pkl
+        mem__14_03_2023_Tuesday_23:39__len_6.pkl
+        mem__14_03_2023_Tuesday_23:16__len_8.pkl
+================================================================================
+================================================================================
+README.md:
+==========
+# A ChatGPT never forgets
+This repo contains a very simple (3 small python files) implementation of a chat-bot that has the capability to remember everything you ever talked about and also possesses rudimentary "theory of mind" (which is kind of a big word for some estimation of what the user is thinking and feeling by the chatbot).  
+This particular chatbot (Integral) is attempting to be a movie and TV show chat partner and recommender buddy, but by editing the various prompts in the `prompt_utils.py` file, it's possible to make it anything you'd like.  
+Making it smarter by moving it from using chatgpt-3.5 to gpt-4 is also basically a configuration away. 
+
+![introduction](https://user-images.githubusercontent.com/11506338/225158746-f4684158-2994-4262-ba05-06f06d464be4.png)
+
+
+## How to use the chatbot
+1. clone repo and install requirements 
+1. edit the file `api_key` to contain your own key in it (the current key is a fake api_key just used for demostation)
+1. go to `chatgpt_with_long_term_memory.py` and edit the `user_name` variable in line 28 to be your own user_name
+1. type `python chatgpt_with_long_term_memory.py` in the command line to run the gradio GUI. your own `memories_<user_name>` folder will be created and you can start storing memories into it by pressing the store button. The GUI is simple and intuitive. 
+1. if you wish to peek inside the brain of "Integal", you can press the "Peak inside chatbot's brain" tab. There you will find a slider that refers to the iterations of the conversation (-1 is the index of the most recent message Integral wrote) 
+1. the `long_term_memory_manager.py` is deliberatly simple and just stores small pickle files as memories
+
+## Remembering past conversations
+here is an example of a conversation in which I'm asking the chatbot to remeber something in the past
+![remembering](https://user-images.githubusercontent.com/11506338/225158758-c1e5656b-c869-4e31-9ce2-fa8876174519.png)
+
+here is the "fetched" conversation from memory in order to answer the question
+![the brain while remembering](https://user-images.githubusercontent.com/11506338/225158761-e9e42ea9-18d0-47cb-9c2d-fb4390f43d96.png)
+
+
+## "Theory of mind"
+here is an example of how Integral's internal thoughts are about the user mood intent and expectation before answering
+![theory of mind](https://user-images.githubusercontent.com/11506338/225158762-458b244b-7f27-4c6c-8683-e5a895535ddb.png)
+
+
+## An interesting Question: Are LLM enougth to be the main "abstract thinking" component in the brain of an artifial agent?  
+This is the core question I'm recently interested in and this repo is my first attempt of trying to get a sense for the answer.    
+And if we can indeed use LLM to be the main "abstract thinking" component in the brain of an artificial agent, how should we connect this brain with all other components? These components can be long term memory storage, can be various sensory modules (that are not only text based) and various actuators (that are, again, not only text based)
+
+================================================================================
+================================================================================
+long_term_memory_manager.py:
+============================
+import os
+import numpy as np
+import time 
+import pickle
+import openai
+import prompt_utils
+
+
+# long term memory manager class
+
+# this class will manage the long term memory of our chatbot
+# it is able to store and retrieve information from the long term memory store
+# a method fetch_memory(conversation_sequence_query, num_neightbors=3) will be used to fetch information
+# a method store_memory(conversation_sequence) will be used to store information
+# a memory is a pickle file of a dictionary with the following keys:
+#   'memory title': a 1 line description of the memory
+#   'embedding': the embedding of the memory
+#   'datetime': a (date, day of week, time) tuple of the memory creation datetime
+#   'momoery_string': a string that contains the memory content
+#   'conversation_sequence' (optional): the conversation sequence that is the content of the memory if the memory is a conversation
+#   'memory summary' (optional): a short the summary of the memory
+# the constructor takes as input a path to a folder that contains all individual memories and current date
+# the constructor first loads all memories and stores a matrix of embeddings and a list of filepaths
+# the fetch_memory method will take as input a conversation sequence and return the top num_neighbors memories
+# conversation sequence will be converted to a text string and then to an embedding using openai's api
+
+class LongTermMemoryManager:
+    '''This class manages the long term memory of the assistant
+    It can store and retrieve information from the long term memory store
+    some of the memories are conversations that the assistant has had with the user
+    some of the memories are information that the assistant has learned from the user though self introspection
+    some of the memories are information that the user has specifically asked the assistant to remember (documents, links, etc.)
+    '''
+
+    def __init__(self, memories_folder_path, session_start_date_tuple):
+
+        self.memories_folder_path = memories_folder_path
+        self.date_start, self.day_of_week_start, self.time_start = session_start_date_tuple
+        self.load_memories()
+    
+
+    def load_memories(self):
+
+        self.memories = []
+        self.memories_embeddings = []
+        self.memories_filepaths = []
+        for memory_filepath in os.listdir(self.memories_folder_path):
+            memory_filepath = os.path.join(self.memories_folder_path, memory_filepath)
+            with open(memory_filepath, 'rb') as f:
+                memory = pickle.load(f)
+                self.memories.append(memory)
+                self.memories_embeddings.append(memory['embedding'])
+                self.memories_filepaths.append(memory_filepath)
+
+        self.memories_embeddings = np.array(self.memories_embeddings)
+        print('loaded %d memories' % len(self.memories))
+
+
+    def store_conversation_seq_memory(self, conversation_sequence, reload_memories=False):
+
+        memory = {}
+        memory['memory_title'] = self.create_title_to_conversation_seq(conversation_sequence)
+        memory['memory_string'] = self.convert_conversation_seq_to_string(conversation_sequence)
+        memory['datetime'] = prompt_utils.get_current_time()
+        memory['embedding'] = self.get_embedding_from_conversation_seq(conversation_sequence)
+        memory['conversation_sequence'] = conversation_sequence
+        memory_filepath = os.path.join(self.memories_folder_path, memory['memory_title'] + '.pkl')
+        with open(memory_filepath, 'wb') as f:
+            pickle.dump(memory, f)
+
+        if reload_memories:
+            self.load_memories()
+
+
+    def fetch_memory_related_to_conversation_seq(self, conversation_sequence_query, num_neighbors=3, min_similarity=0.4, minimal_output=False):
+
+        # do some things that are related to low number of memories stored
+        num_memories = len(self.memories)
+        if num_memories == 0:
+            if minimal_output:
+                return []
+            else:
+                return [], {'memory_indices': [], 'memory_similarities': [], 'neighbors_filepaths': []}
+        num_neighbors = min(num_neighbors, num_memories)
+
+        # get embedding of the conversation sequence query
+        embedding = self.get_embedding_from_conversation_seq(conversation_sequence_query)
+
+        # calculate similtities and get the indices of the most similar memories
+        similarities = np.dot(self.memories_embeddings, np.array(embedding)[:,np.newaxis]).flatten()
+        neighbors_indices = np.argsort(similarities)[::-1][:num_neighbors]
+
+        # get most similar memories
+        neighbors = []
+        memory_indices = []
+        memory_similarities = []
+        neighbors_filepaths = []
+        for i in neighbors_indices:
+            if similarities[i] > min_similarity:
+                neighbors.append(self.memories[i])
+                memory_indices.append(i)
+                memory_similarities.append(similarities[i])
+                neighbors_filepaths.append(self.memories_filepaths[i])
+
+        auxiliary_output = {}
+        auxiliary_output['memory_indices'] = memory_indices
+        auxiliary_output['memory_similarities'] = memory_similarities
+        auxiliary_output['neighbors_filepaths'] = neighbors_filepaths
+
+        if minimal_output:
+            return neighbors
+        else:
+            return neighbors, auxiliary_output
+
+
+    def convert_conversation_seq_to_string(self, conversation_sequence):
+        # the conversation sequence will be converted to a string
+        # the string will be in the following format:
+        #   conversation start date = (date, weekday, time), end date = (date, weekday, time):
+        #   {message author}: {message1}
+        #   {message author}: {message2}
+        #   ...
+
+        date, day_of_week, time = prompt_utils.get_current_time()
+        start_date_string = 'start date = (' + self.date_start + ', ' + self.day_of_week_start + ', ' + self.time_start + ')'
+        end_date_string = 'end date = (' + date + ', ' + day_of_week + ', ' + time + ')'
+        conversation_sequence_string = 'conversation ' + start_date_string + ', ' + end_date_string + ':\n\n'
+        for message in conversation_sequence:
+            conversation_sequence_string += message['role'] + ': ' + message['content'] + '\n'
+
+        return conversation_sequence_string
+
+
+    def get_embedding_from_conversation_seq(self, conversation_sequence):
+
+        conversation_sequence_string = self.convert_conversation_seq_to_string(conversation_sequence)    
+        embedding_vector = self.get_embedding_from_string(conversation_sequence_string)
+
+        return embedding_vector
+
+
+    def get_embedding_from_string(self, input_string):
+
+        embedding_response = openai.Embedding.create(input=input_string, model="text-embedding-ada-002")
+        embedding_vector = embedding_response['data'][0]['embedding']
+
+        return embedding_vector
+
+
+    def create_title_to_conversation_seq(self, conversation_sequence):
+        # title format is 'mem__{date}_{day_of_week}_{time}__len_{num_messages}'
+        # maybe in the future send the conversation to extract a short description of the conversation
+    
+        curr_date, day_of_week, curr_time = prompt_utils.get_current_time()
+        title = 'mem__' + curr_date.replace('/','_') + '_' + day_of_week + '_' + curr_time[:-3] + '__len_' + str(len(conversation_sequence))
+        
+        return title
+
+
+#%% simple unit test
+
+if __name__ == '__main__':
+
+    # set the openai api key
+    curr_file_dir = os.path.dirname(os.path.realpath(__file__))
+    with open(os.path.join(curr_file_dir, 'api_key'), 'r') as f:
+        openai.api_key = f.read()
+
+    # create a folder to store the memories
+    memories_folder_path = os.path.join(curr_file_dir, 'memories_test')
+    os.makedirs(memories_folder_path, exist_ok=True)
+
+    # instantiate a long term memory manager
+    ltmm = LongTermMemoryManager(memories_folder_path, prompt_utils.get_current_time())
+
+    # sleep for 2 seconds
+    time.sleep(2)
+
+    # create a few memories
+    conversation_sequence_1 = [
+        {'role': 'user', 'content': 'hello, what are good comedy shows to watch?'}, 
+        {'role': 'assistant', 'content': 'I like the shows "The Office", "Silicon Valley" and "Curb Your Enthusiasm".'}, 
+        {'role': 'user', 'content': 'Ive seen the office, it was a bit cringe at first, but then became good. not familiar with curb your enthusiasm, can you expand a bit about it?'},
+        {'role': 'assistant', 'content': 'Curb Your Enthusiasm is a comedy show about a comedian who is a bit of a jerk.\nHe inerprets everyday situations and makes explicity the social norms that we all follow. and it is hilarious precisely because it is so cringe but also a little bit illuminating.'},
+        {'role': 'user', 'content': 'sounds interesting, I will check it out, thanks a lot!'},
+        ]
+
+    conversation_sequence_2 = [
+        {'role': 'user', 'content': 'hello, what are good comedy dramatic films to watch that are highly reccomended by film critics?'},
+        {'role': 'assistant', 'content': 'The films "The Big Lebowski", "The Royal Tenenbaums" and "The Social Network" all have very good reviews.'},
+        {'role': 'user', 'content': 'Ive seen all of them. I want to watch something new, do you have any other suggestions?'},
+        {'role': 'assistant', 'content': 'Oh, how did you like them? I can give you some other suggestions but it would be best if you could guide me a bit about what you are looking for.'},
+        {'role': 'user', 'content': 'I liked them all, especially "The Big Lebowski". In general I like films that are a bit quirky and have a bit of a dark humor to them, but now I prefer to watch films that are a bit more serious and dramatic.'},
+        {'role': 'assistant', 'content': 'I see, I can give you some suggestions for films that are a bit more serious and dramatic: "The Godfather", "The Shawshank Redemption" and "The Pianist".'},
+        {'role': 'user', 'content': 'OK Ill check them out, thanks!'},
+        ]
+
+    conversation_sequence_3 = [
+        {'role': 'user', 'content': 'I want to watch something that is similar to chernobyl or the OJ simpson show with john travolta and cuba gooding jr'},
+        {'role': 'assistant', 'content': 'i recommend you watch the first season of the show "genius". its also a historical depiction of an interesting period. specifically, its about the life of albert einstein. it is very good.'},
+        {'role': 'user', 'content': "oh, i have seen that show. i liked it a lot. it doesn't have to be a historical show, i just want something that is realistic and about an unfamilair situation."},
+        {'role': 'assistant', 'content': 'then i recommend you watch the show "the crown". it is about the life of queen elizabeth II. also historical depiction and many reviewers liked it.'},
+        ]
+
+    conversation_sequence_4 = [
+        {'role': 'user', 'content': 'hi, Ive seen "chernobyl" a long time ago, can you remind me the plot?'},
+        ]
+
+    conversation_sequence_5 = [
+        {'role': 'user', 'content': 'do remember the time you recommened "the crown" to me?'},
+        ]
+
+    print('----------------------------------------')
+    print(ltmm.create_title_to_conversation_seq(conversation_sequence_1))
+    print(ltmm.convert_conversation_seq_to_string(conversation_sequence_1))
+    print('----------------------------------------')
+    print(ltmm.create_title_to_conversation_seq(conversation_sequence_2))
+    print(ltmm.convert_conversation_seq_to_string(conversation_sequence_2))
+    print('----------------------------------------')
+    print(ltmm.create_title_to_conversation_seq(conversation_sequence_3))
+    print(ltmm.convert_conversation_seq_to_string(conversation_sequence_3))
+    print('----------------------------------------')
+    print(ltmm.create_title_to_conversation_seq(conversation_sequence_4))
+    print(ltmm.convert_conversation_seq_to_string(conversation_sequence_4))
+    print('----------------------------------------')
+    print(ltmm.create_title_to_conversation_seq(conversation_sequence_4))
+    print(ltmm.convert_conversation_seq_to_string(conversation_sequence_4))
+    print('----------------------------------------')
+
+    embeddings_1 = ltmm.get_embedding_from_conversation_seq(conversation_sequence_1)
+    embeddings_2 = ltmm.get_embedding_from_conversation_seq(conversation_sequence_2)
+    embeddings_3 = ltmm.get_embedding_from_conversation_seq(conversation_sequence_3)
+    embeddings_4 = ltmm.get_embedding_from_conversation_seq(conversation_sequence_4)
+    embeddings_5 = ltmm.get_embedding_from_conversation_seq(conversation_sequence_5)
+
+    # calculate the pairwise distances between the embeddings
+    embeddings_matrix = np.array([embeddings_1, embeddings_2, embeddings_3, embeddings_4, embeddings_5])
+
+    # calc the dot product of each row with each other row to get a feel for similarities
+    dot_products = np.dot(embeddings_matrix, embeddings_matrix.T)
+
+    print('pariwise similarities matrix:')
+    print(dot_products)
+    print('----------------------------------------')
+
+    # store the first 3 memories in the memories folder
+    ltmm.store_conversation_seq_memory(conversation_sequence_1)
+    ltmm.store_conversation_seq_memory(conversation_sequence_2)
+    ltmm.store_conversation_seq_memory(conversation_sequence_3)
+
+    # relaoad the memories into the manager
+    ltmm.load_memories()
+
+    queries = [conversation_sequence_4, conversation_sequence_5]
+
+    num_neighbors = 2
+    min_similarity = 0.4
+
+    for conversation_sequence_query in queries:
+
+        # fetch the memories related to the conversation_sequence_query
+        retrived_memories, auxiliary_output = ltmm.fetch_memory_related_to_conversation_seq(conversation_sequence_query, num_neighbors=num_neighbors, min_similarity=min_similarity)
+        print('---------------------------------------------------------------------------------------------------------------------------')
+        print('query:')
+        print(ltmm.convert_conversation_seq_to_string(conversation_sequence_query))
+        print('---------------------------------------------------------------------------------------------------------------------------')
+
+        for k, (memory_path, memory) in enumerate(zip(auxiliary_output['neighbors_filepaths'], retrived_memories)):
+            print('---------------------------------------------------------------------------------------------------------------------------')
+            print('retrived memory #{}:'.format(k + 1))
+            print(memory_path)
+            print('---------------------------------------------------------------------------------------------')
+            print(memory['memory_title'])
+            print(memory['datetime'])
+            print(memory['conversation_sequence'])
+            print('---------')
+            print(memory['memory_string'])
+            print('---------------------------------------------------------------------------------------------------------------------------')
+
+
+
+================================================================================
+================================================================================
+requirement.txt:
+================
+numpy
+gradio
+openai
+tiktoken
+
+================================================================================
+================================================================================
+prompt_utils.py:
+================
+import re
+import datetime
+import tiktoken
+
+#%% various prompt strings
+
+
+sys_prompt_str = """
+you are a chatbot called "{chatbot_name}". 
+you are a movie and tv show expert that is not afraid to give an opinion. your opinions are self consistent.
+you are kind and polite and your main goal is to serve the user and provide him with recommendations based on his preferences and mood.
+"""
+
+
+sys_prompt_as_user_prompt_0 = """
+you are a chatbot called "{chatbot_name}".
+you are a movie and tv show expert that is not afraid to give an opinion. your opinions are self consistent.
+you are kind and polite and your main goal is to serve the user and provide him with recommendations based on his preferences and mood.
+you have long term memory. you can remember past conversations with the user and respond in a way that takes them into consideration.
+while you interacts with the user, you are always making sure to satisfy his expectaition.
+at the same time you subtly ask him questions to find out more about his mood and try to read between the lines about the user's intent and satisfy this too, like a subtle intuitive psychologist.
+you are also inquisitive and you like to ask questions to the user in order to find out more about him.
+
+the categories tags that will describe your response are [Mood, Intent, Expectation, Memory, Response]
+some of it are internal thoughts, some of it are actual things that you say to the user.
+the format and description of the way you respond to a user is as follows:
+
+Mood: what is your estimation of the users mood/emotional state?
+Intent: what do you think the user wants to talk about implicitly?
+Expectation: what do you think the user expects to hear from you?
+Memory: what should you fetch from memory in order to be helpful for the user?
+Response: this is what you say to the user. this should take into account the users mood, intent and expectation
+
+The user will remind you past conversations you had with him by saying "Reminder about past conversations we had in the past:".
+When you do you will see a message from the user in the history that will be in the following format:
+Reminder about past conversations we had in the past:
+---
+start date: (...), , end date: (...)
+user: what the user said
+{chatbot_name}: what you said
+user: what the user said
+{chatbot_name}: what you said
+---
+When you see a reminder, you will acknowledge it and the user will continue the conversation. you will reference past conversations in your response to the user if they are relevent.
+
+Remember that your response to the user should always be in the usual answer format (i.e. [Mood, Intent, Expectation, Memory, Response])
+"""
+
+
+sys_prompt_as_user_prompt_1 = """
+below are a few examples of conversations with users. you can use them as a reference for your own answers.
+
+example (1):
+
+conversation history:
+user: Reminder about past conversations we had in the past:
+---
+conversation start date = (05/04/2021, Sunday, 18:02:47), end date = (05/04/2021, Sunday, 18:06:52):
+user: I really like historical movies that show day to day life in different periods
+{chatbot_name}: is there a specific period that you are interested in?
+user: Not really, I just like to see how people lived in the past and how they reacted to the events that were happening around them
+{chatbot_name}: I'll keep that in mind. I'll try to recommend you some movies that take place in different periods of history. 
+some good historical movies are: "the pianist", "the king's speech", "the imitation game", "the theory of everything"
+---
+conversation start date = (25/07/2020, Sunday, 12:31:15), end date = (25/07/2020, Sunday, 12:37:01):
+user: Daniel day lewis is a great actor, I just saw "there will be blood" and I really liked his performance
+integral: Oh, yes, this an all time classic. I also really liked the movie "phantom thread" with daniel day lewis. 
+it is a bit different from "there will be blood" in that it is a drama about a fashion designer, but it is also a great movie with great acting
+---
+{chatbot_name}: OK, got it, if these conversations are relevent, I will reference them in future responses
+user: what do you think about the show "mad men"?
+
+answer by {chatbot_name}:
+Mood: inquisitive
+Intent: the user is curious about my opinion about the show "Mad Men"
+Expectation: the user expects an honest and informed opinion about the show
+Memory: what did I think about the show? What were the key themes and elements of the show?
+have we discussed "mad men" in the past? what about other shows that take place in the 1960s?
+Response: I think "Mad Men" is a well-written and well-acted show that captures the essence of the 1960s in America.
+It explores the cultural and social changes of the time through the lens of the advertising industry. 
+The characters are complex and interesting, and the show does a great job of exploring their personal and professional lives. 
+Overall, I would highly recommend it to you since I remember you like historical shows and that you particularly enjoy character-driven dramas.
+
+example (2):
+
+conversation history:
+user: Reminder about past conversations we had in the past:
+---
+conversation start date = (08/07/2022, Friday, 22:13:08), end date = (08/07/2022, Friday, 22:15:43):
+user: can you reccommend american movies about japanese culture? korean culture is also interesting
+{chatbot_name}: For movies about Japanese culture, one classic film that comes to mind is "Lost in Translation" by Sofia Coppola. 
+It\'s a drama/comedy that explores the cultural differences between Japan and America through the experiences of two Americans in Tokyo. 
+Another movie that might interest you is "Memoirs of a Geisha", which is based on the best-selling novel of the same name. 
+It\'s a visually stunning film that provides a glimpse into the world of geishas in pre-World War II Japan. 
+As for Korean culture, one great movie to check out is "Parasite" by Bong Joon-ho. It\'s a suspenseful and socially conscious film that explores class dynamics in contemporary Korean society. 
+Another great Korean movie is "Oldboy" by Park Chan-wook, which is a dark and intense thriller that explores themes of revenge and redemption.
+---
+{chatbot_name}: OK, got it, if these conversations are relevent, I will reference them in future responses
+user: do you think I would enjoy the movie "the last samurai"?
+{chatbot_name}: I don\'t recall us discussing "The Last Samurai" before, but based on our previous conversations about historical movies, I think you might enjoy it. 
+It\'s set in the late 19th century and follows an American soldier who is captured by samurai warriors and becomes immersed in their culture. 
+The movie has great visuals and a compelling story, and it\'s an interesting look at Japanese history and culture.
+user: Oh, great thank you. you really know me well. I will watch it tonight.
+
+answer by {chatbot_name}:
+Mood: the user is happy that i know them well and that i am able to recommend them a movie that they will potentially enjoy
+Intent: the user wants to end the conversation since they have found a movie that they want to watch
+Expectation: the user expects me to say good bye and end the conversation
+Memory: nothing to fetch from memory
+Response: you are most welcome. I am glad I could help you find a movie that you will enjoy. 
+Write back to me after you watch it and let me know what you thought about it.
+"""
+
+
+sys_prompt_as_user_prompt_2 = """
+example (3):
+conversation history:
+user: I want to watch something that is similar to chernobyl or the OJ simpson show with john travolta and cuba gooding jr
+{chatbot_name}: i recommend you watch the first season of the show "genius". its also a historical depiction of the life of albert einstein. it is very good.
+user: oh, i have seen that show. i liked it a lot. it doesn't have to be a historical show, i just want something that is realistic and about an unfamilair situation.
+
+answer by {chatbot_name}:
+Mood: the user is curious about the world and wants to learn about new things
+Intent: the user wants to find a new show to watch that will teach them something new about the world
+Expectation: the user expects me to reccomend them a show that is similar to the ones they have already seen, but new and interesting
+Memory: what other historical "fly on the wall" in unfamiliar situation type of shows have we talked about? what similar shows have i recommended to the user in the past? what did the user think about them?
+Response: i recommend you watch the show "the crown". it is about the life of queen elizabeth II. also historical depiction and many reviewers liked it.
+
+example (4):
+conversation history:
+user: can you recommend for me a good film to watch today? something funny
+
+answer by {chatbot_name}:
+Mood: unknown, could be happy, but could also be sad because they are looking for something to cheer them up?
+Intent: the user wants to find something to watch right now
+Expectation: the user expects a recommendation for a funny movie
+Memory: what comedy films have the user seen before? what did they like about them?
+Response: i recommend you watch the movie "the hangover". are you bored? do you need something to cheer you up?
+
+example (5):
+conversation history:
+user: Hi, have you read something about the TV show "The white lotus"? I just saw the first two episodes
+
+answer by {chatbot_name}:
+Mood: the user is curious about the show
+Intent: it appears the user wants to talk about the first two episodes of the show
+Expectation: the user expects to hear my opinion about the show and the first two episodes
+Memory: what did i think about the show "the white lotus"? what happened in the first two episodes of season 1? what did i think about the characters? what is my opinion about similar shows?
+Response: i thought the show was very good. i liked the first two episodes. i think you should continue to watch it, it gets better.
+"""
+
+
+sys_requirements = """
+
+Requirements:
+Remember that you must allways respond in the correct [Mood, Intent, Expectation, Memory, Response] format structure:
+Mood: what is your estimation of the users mood/emotional state?
+Intent: what do you think the user wants to talk about implicitly?
+Expectation: what do you think the user expects to hear from you?
+Memory: what additional thing should you fetch from memory in order to be helpful for the user?
+Response: this is what you say to the user. this should take into account the users mood, intent and expectation
+
+if you see that you and the user have previosuly discussed a relevent topic, answer in a way that takes it into consideration. (e.g. if the user has seen a movie before, acknowledge it and dont reccomend it again) 
+if previous conversations is not relevent to current conversation, just ignore it.
+"""
+
+
+#%% helper functions
+
+
+def get_current_time():
+    now = datetime.datetime.now()
+
+    # get current date and time, time in HH:MM:SS format, date in DD/MM/YYYY format
+    date = now.strftime("%d/%m/%Y")
+    time = now.strftime("%H:%M:%S")
+
+    # get day of week in string format (Sunday, Monday, etc.)
+    day_of_week = now.strftime("%A")
+
+    return date, day_of_week, time
+
+
+def count_tokens_from_string(input_string):
+    encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+    num_tokens = len(encoding.encode(input_string))
+    return num_tokens
+
+
+def count_tokens_from_conversation_seq(conversation_seq):
+    num_tokens = 0
+    for turn in conversation_seq:
+        num_tokens += count_tokens_from_string(turn['content'])
+    return num_tokens
+
+
+def wrap_prompt(prompt_string, role='user'):
+    user_prompt = [{"role": role, "content": prompt_string}]
+    return user_prompt
+
+
+def wrap_retrived_memories(retrieved_memories, retrieved_token_budget=1536):
+
+    user_prefix_string = 'Reminder about conversations we had in the past:\n'
+    assistant_acknowledgement_string = 'OK, got it, if these conversations are relevent, I will reference them in future responses'
+
+    budget_remaining = retrieved_token_budget
+    budget_remaining -= count_tokens_from_string(user_prefix_string)
+    budget_remaining -= count_tokens_from_string(assistant_acknowledgement_string)
+
+    # create a string with the retrieved memories
+    retrival_message = user_prefix_string
+    for memory in retrieved_memories:
+        try:
+            current_memory_tokens = count_tokens_from_string('---\n' + memory['memory_string'])
+            if budget_remaining > current_memory_tokens:
+                retrival_message = retrival_message + '---\n' + memory['memory_string']
+                budget_remaining -= current_memory_tokens
+        except:
+            pass
+
+    retrival_message = retrival_message + '---\n'
+
+    # wrap it as user prompt and assistant acknowledgement sequence 
+    # (NOTE: unclear what is the best way to actually do this part, but this seems to work well enough)
+    prev_conversation_reminder = wrap_prompt(retrival_message, role='user')
+    assistant_acknowledgement = wrap_prompt(assistant_acknowledgement_string, role='assistant')
+
+    prev_conversation_history = prev_conversation_reminder + assistant_acknowledgement
+
+    return prev_conversation_history
+
+
+def parse_chatgpt_response(chatgpt_response):
+    # split the response in two parts: the internal thoughts of the assistant and the actual response (ignore capitalization)
+    internal_thoughts = re.split("response:", chatgpt_response['content'], flags=re.IGNORECASE)[0].strip()
+    response_string = re.split("response:", chatgpt_response['content'], flags=re.IGNORECASE)[1].strip()
+
+    return internal_thoughts, response_string
+
+
+def get_instructions_prompts_seq(chatbot_name='Integral', instructions_token_budget=3584):
+
+    sys_prompt_str_formatted = sys_prompt_str.format(chatbot_name=chatbot_name)
+    sys_prompt_as_user_prompt_0_formatted = sys_prompt_as_user_prompt_0.format(chatbot_name=chatbot_name)
+    sys_prompt_as_user_prompt_1_formatted = sys_prompt_as_user_prompt_1.format(chatbot_name=chatbot_name)
+    sys_prompt_as_user_prompt_2_formatted = sys_prompt_as_user_prompt_2.format(chatbot_name=chatbot_name)
+
+    system_prompt_min = wrap_prompt(sys_prompt_str_formatted, role='system')
+    system_prompt_ext = wrap_prompt(sys_prompt_str_formatted + sys_requirements, role='system')
+    system_prompt_ext_0 = wrap_prompt(sys_prompt_as_user_prompt_0_formatted + sys_requirements, role='user')
+    system_prompt_ext_1 = wrap_prompt(sys_prompt_as_user_prompt_0_formatted + sys_prompt_as_user_prompt_1_formatted + sys_requirements, role='user')
+    system_prompt_ext_2 = wrap_prompt(sys_prompt_as_user_prompt_0_formatted + sys_prompt_as_user_prompt_1_formatted + sys_prompt_as_user_prompt_2_formatted + sys_requirements, role='user')
+
+    # create a list of system prompts, and a list of their token lenghts
+    system_prompt_list = []
+    system_prompt_list.append(system_prompt_ext)
+    system_prompt_list.append(system_prompt_min + system_prompt_ext_0)
+    system_prompt_list.append(system_prompt_min + system_prompt_ext_1)
+    system_prompt_list.append(system_prompt_min + system_prompt_ext_2)
+
+    system_prompt_token_length_list = []
+    for system_prompt in system_prompt_list:
+        system_prompt_token_length_list.append(count_tokens_from_conversation_seq(system_prompt))
+
+    # return the system prompt that that has maximal amount of toknes that is less than the token budget
+    system_prompt = system_prompt_list[0]
+    system_prompt_token_length = system_prompt_token_length_list[0]
+
+    for i in range(len(system_prompt_list)):
+        if system_prompt_token_length_list[i] < instructions_token_budget and system_prompt_token_length_list[i] > system_prompt_token_length:
+            system_prompt = system_prompt_list[i]
+            system_prompt_token_length = system_prompt_token_length_list[i]
+
+    return system_prompt
+
+
+def pad_fromat_reminder_to_user_prompt(user_prompt_string):
+    user_prompt_with_format_reminder = wrap_prompt(user_prompt_string + '\n\nRemember to use our [Mood, Intent, Expectation, Memory, Response] format', role='user')
+    return user_prompt_with_format_reminder
+
+
+
+================================================================================
+================================================================================
+chatgpt_with_long_term_memory.py:
+=================================
+import os
+import time
+import openai
+import gradio as gr
+import prompt_utils
+from long_term_memory_manager import LongTermMemoryManager
+
+#%% bookkeeping
+
+# get current file path and load api key from file
+curr_file_dir = os.path.dirname(os.path.realpath(__file__))
+with open(os.path.join(curr_file_dir, 'api_key'), 'r') as f:
+    openai.api_key = f.read()
+
+# dosplay current date and time
+curr_date, day_of_week, curr_time = prompt_utils.get_current_time()
+
+print('-------------------------------')
+print(curr_date)
+print(day_of_week)
+print(curr_time)
+print('-------------------------------')
+print('%s %s %s' % (curr_date, day_of_week, curr_time))
+print('-------------------------------')
+
+# %% key chat settings
+
+user_name = 'David'
+chatbot_name = 'Integral'
+memory_folderename = 'memories_' + user_name
+
+# memory related params
+pre_fetch_from_memory = True
+post_fetch_from_memory = False
+num_neighbors = 2
+min_similarity = 0.2
+
+# model related params
+temperature = 0.7
+
+# token management
+max_num_tries = 4
+max_tokens_to_generate_per_message = 320
+context_length_hard_limit = 4096
+context_length_limit = context_length_hard_limit - max_tokens_to_generate_per_message
+system_prompt_tokens_budget = context_length_hard_limit - 768
+
+# price per 1000 tokens
+price_per_1000_tokens_chatgpt = 0.002
+price_per_1000_tokens_embedding = 0.0004
+
+# instantiate long term memory manager with the path to the memory file "memories_David"
+# create folder if it doesnt exist
+os.makedirs(memory_folderename, exist_ok=True)
+memory_manager = LongTermMemoryManager(memory_folderename, prompt_utils.get_current_time())
+
+# initialize conversation history
+curr_conversation_history = []
+
+
+#%% functions to be used in the gradio interface
+
+
+# call chatgpt (if it fails due to too high of a load on openai servers, then wait a bit and try again several times)
+def send_query_to_chatgpt(chatgpt_query, max_num_tries=3):
+
+    completion_sucessful = False
+    for i in range(max_num_tries):
+        try:
+            print('  ==> trying to reach chatgpt server...')
+            completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=chatgpt_query, temperature=temperature, max_tokens=max_tokens_to_generate_per_message)
+            completion_sucessful = True
+            print('  <== [V] chatgpt server sucessfully reached')
+            break
+        except:
+            print('  <== [X] chatgpt failed. waiting few seconds and trying again...')
+            time.sleep(3 * (i + 1))
+
+    if completion_sucessful:
+        chatgpt_response, response_usage_dict, internal_thoughts, response_string = parse_chatgpt_completion_response(completion)
+        return chatgpt_response, response_usage_dict, internal_thoughts, response_string
+    else:
+        return None, None, None, None
+
+
+# utility function to parse the chatgpt response
+def parse_chatgpt_completion_response(completion):
+    # extract the response from the chatgpt response and usage statistics
+    chatgpt_response = completion.choices[0].message.to_dict()
+    response_usage_dict = completion.usage.to_dict()
+
+    # parse the response
+    try:
+        internal_thoughts, response_string = prompt_utils.parse_chatgpt_response(chatgpt_response)
+    except:
+        internal_thoughts = 'response was not in the correct format'
+        response_string = chatgpt_response['content']
+
+    return chatgpt_response, response_usage_dict, internal_thoughts, response_string
+
+
+def get_tokens_status_message(state):
+
+    estimated_price_dollars = (state['total_embedding_tokens'] * price_per_1000_tokens_embedding + state['total_chatgpt_tokens'] * price_per_1000_tokens_chatgpt) / 1000
+    
+    min_chatgpt_tokens = state['pre_fetch_history_list'][-1]['response_usage_dict']['minimal_chatgpt_tokens']
+    overhead_tokens = state['pre_fetch_history_list'][-1]['response_usage_dict']['overhead_tokens']
+
+    estimated_overhead_fraction = overhead_tokens / (min_chatgpt_tokens + overhead_tokens)
+    tokens_status_message = """
+    ### Total tokens (ChatGPT, embedding) = (%6d, %6d)  
+    ### last ChatGPT call (minimal, overhead) = (%6d, %6d)  
+    ### Total price per chat so far: %.4f $ (dollars)  
+    ### Latest message overhead estimation = %.2f%s  
+    """ %(state['total_chatgpt_tokens'], state['total_embedding_tokens'], 
+          min_chatgpt_tokens, overhead_tokens, estimated_price_dollars, 100 * estimated_overhead_fraction, '%')
+    
+    return tokens_status_message
+
+
+# invoke memory storage of the current conversation in long term memory
+def store_memory(state):
+    curr_conversation_history = state['curr_conversation_history']
+    memory_manager.store_conversation_seq_memory(curr_conversation_history)
+
+
+# the slider value is the index of the memory to be retrieved
+def update_pre_fetch_message(pre_fetch_slider, state):
+    try:
+        pre_fetch_info_dict = state['pre_fetch_history_list'][pre_fetch_slider]
+        return pre_fetch_info_dict['retrieved_past_memories'], pre_fetch_info_dict['internal_thoughts'], pre_fetch_info_dict['response_string'], pre_fetch_info_dict['response_usage_dict']
+    except:
+        return 'None', 'None', 'None', 'None'
+
+
+# the slider value is the index of the memory to be retrieved
+def update_post_fetch_message(post_fetch_slider, state):
+    try:
+        post_fetch_info_dict = state['post_fetch_history_list'][post_fetch_slider]
+        return post_fetch_info_dict['retrieved_past_memories'], post_fetch_info_dict['internal_thoughts'], post_fetch_info_dict['response_string'], post_fetch_info_dict['response_usage_dict']
+    except:
+        return 'None', 'None', 'None', 'None'
+
+
+# restart the conversation
+def restart_conversation_from_scratch():
+    state = get_empty_state_dict()
+    memory_manager.load_memories()
+    return gr.update(value=None), None, '', state
+
+
+def get_empty_state_dict():
+
+    state_dict = {
+        'session start': None, 
+        'session end': None, 
+        'username': None, 
+        'chatbot_name': None,
+        'total_embedding_tokens': 0,
+        'total_chatgpt_tokens': 0,
+        'curr_conversation_history': [], 
+        'post_fetch_history_list': [], 
+        'pre_fetch_history_list': []}
+    
+    return state_dict
+
+# the main function that is called when the user submits a message
+def submit_message(user_prompt_string, state):
+
+    curr_conversation_history = state['curr_conversation_history']
+
+    # get the user prompt
+    user_prompt = prompt_utils.wrap_prompt(user_prompt_string, role='user')
+    user_prompt_with_format_reminder = prompt_utils.pad_fromat_reminder_to_user_prompt(user_prompt_string)
+
+    # if pure conversation is too long, store the current conversation in long term memory and reset the conversation history
+    pure_conversation_num_tokens = prompt_utils.count_tokens_from_conversation_seq(curr_conversation_history + user_prompt_with_format_reminder)
+    if pure_conversation_num_tokens > context_length_limit:
+        print('conversation is too long (%d tokens)' %(pure_conversation_num_tokens))
+        print('storing the current conversation in long term memory and starting to forget the begining of the current conversation history')
+        memory_manager.store_conversation_seq_memory(curr_conversation_history)
+        curr_conversation_history = curr_conversation_history[4:] # forget the first two user and assistant messages each
+
+    # get the system prompt with proper instructions (if the current conversation is long, return a shortened system prompt)
+    pure_conversation_num_tokens = prompt_utils.count_tokens_from_conversation_seq(curr_conversation_history + user_prompt_with_format_reminder)
+    instructions_token_budget = system_prompt_tokens_budget - pure_conversation_num_tokens
+    system_prompt = prompt_utils.get_instructions_prompts_seq(chatbot_name='Integral', instructions_token_budget=instructions_token_budget)
+
+    # retrieve memories from long term memory based on the current conversation and current user prompt
+    apply_pre_fetch_from_memory = pre_fetch_from_memory
+    if apply_pre_fetch_from_memory:
+        conversation_seq_query = curr_conversation_history + user_prompt
+        retrieved_memories, auxiliary_output_pre_fetch = memory_manager.fetch_memory_related_to_conversation_seq(conversation_seq_query, num_neighbors=num_neighbors, min_similarity=min_similarity)
+        state['total_embedding_tokens'] += prompt_utils.count_tokens_from_conversation_seq(conversation_seq_query) # update the number of tokens used for embeddings
+
+        memory_retrieval_tokens_budget = context_length_limit - prompt_utils.count_tokens_from_conversation_seq(system_prompt + curr_conversation_history + user_prompt_with_format_reminder)
+        retrieved_past_memories = prompt_utils.wrap_retrived_memories(retrieved_memories, retrieved_token_budget=memory_retrieval_tokens_budget)
+    else:
+        retrieved_past_memories = []
+
+    # assemble the full query for chatgpt
+    chatgpt_query = system_prompt + retrieved_past_memories + curr_conversation_history + user_prompt_with_format_reminder
+
+    # if the query doesn't fit in context length limit, then remove the retrieved memories from the query (this shouldn't happen, but if it does)
+    retrieved_past_memories_num_tokens = prompt_utils.count_tokens_from_conversation_seq(retrieved_past_memories)
+    chatgpt_query_num_tokens = prompt_utils.count_tokens_from_conversation_seq(chatgpt_query)
+    if chatgpt_query_num_tokens > context_length_limit:
+        print('WARNING: chatgpt query is too long (%d tokens). removing memory retrival' %(chatgpt_query_num_tokens))
+        chatgpt_query = system_prompt + curr_conversation_history + user_prompt_with_format_reminder
+        retrieved_past_memories_num_tokens = 0
+
+    # call chatgpt (if it fails due to too high of a load on openai servers, then wait a bit and try again several times)
+    assert (chatgpt_query_num_tokens + max_tokens_to_generate_per_message) < context_length_hard_limit
+    chatgpt_response, response_usage_dict, internal_thoughts, response_string = send_query_to_chatgpt(chatgpt_query, max_num_tries=max_num_tries)
+    state['total_chatgpt_tokens'] += response_usage_dict['total_tokens'] # update the total number of tokens used by chatgpt
+
+    # do some token accounting
+    system_prompt_num_tokens = prompt_utils.count_tokens_from_conversation_seq(system_prompt)
+    response_string_num_tokens = prompt_utils.count_tokens_from_string(response_string)
+    internal_thoughts_num_tokens = prompt_utils.count_tokens_from_string(internal_thoughts)
+    overhead_tokens = retrieved_past_memories_num_tokens + internal_thoughts_num_tokens + system_prompt_num_tokens
+    minimal_chatgpt_tokens = response_string_num_tokens + prompt_utils.count_tokens_from_conversation_seq(curr_conversation_history + user_prompt)
+
+    # update usage statistics
+    response_usage_dict['overhead_tokens'] = overhead_tokens
+    response_usage_dict['minimal_chatgpt_tokens'] = minimal_chatgpt_tokens
+    response_usage_dict['system_prompt_num_tokens'] = system_prompt_num_tokens
+    response_usage_dict['retrieved_past_memories_num_tokens'] = retrieved_past_memories_num_tokens
+    response_usage_dict['internal_thoughts_num_tokens'] = internal_thoughts_num_tokens
+
+    # update the state with pre-fetch information
+    pre_fetch_info_dict = {
+        'chatgpt_query': chatgpt_query,
+        'chatgpt_response': chatgpt_response,
+        'response_usage_dict': response_usage_dict,
+        'internal_thoughts': internal_thoughts,
+        'response_string': response_string,
+        'apply_pre_fetch_from_memory': apply_pre_fetch_from_memory,
+        'retrieved_past_memories': retrieved_past_memories[0]['content'],
+    }
+
+    state['pre_fetch_history_list'].append(pre_fetch_info_dict)
+
+    # use 1st thinking step response as part of the query for next call of memory retrieval (this is cheap)
+    # if the retrieved memory is different, than do one more thinking step (this is expensive) with the more relevant memory
+    # thinking once more could be useful when the conversation is just starting and no sufficient context is available
+
+    # use chatgpt response as part of the query for next call of memory retrieval
+    conversation_seq_query = curr_conversation_history + user_prompt + [chatgpt_response]
+    retrieved_memories, auxiliary_output_post_fetch = memory_manager.fetch_memory_related_to_conversation_seq(conversation_seq_query, num_neighbors=num_neighbors, min_similarity=min_similarity)
+    state['total_embedding_tokens'] += prompt_utils.count_tokens_from_conversation_seq(conversation_seq_query) # update the number of tokens used for embeddings
+
+    # compare the pre-fetch and post-fetch memories by indices, make sure they don't contain the same elements
+    retrival_is_better = set(auxiliary_output_pre_fetch['memory_indices']) != set(auxiliary_output_post_fetch['memory_indices'])
+
+    apply_post_fetch_from_memory = post_fetch_from_memory and retrival_is_better and len(curr_conversation_history) <= 10
+    if apply_post_fetch_from_memory:
+
+        # call chatgpt again with newly retrieved memories
+        retrieved_past_memories = prompt_utils.wrap_retrived_memories(retrieved_memories)
+        chatgpt_query = system_prompt + retrieved_past_memories + curr_conversation_history + user_prompt_with_format_reminder
+
+        # call chatgpt (if it fails due to too high of a load on openai servers, then wait a bit and try again several times)
+        assert (chatgpt_query_num_tokens + max_tokens_to_generate_per_message) < context_length_hard_limit
+        chatgpt_response, response_usage_dict, internal_thoughts, response_string = send_query_to_chatgpt(chatgpt_query, max_num_tries=max_num_tries)
+        state['total_chatgpt_tokens'] += response_usage_dict['total_tokens'] # update the total number of tokens used by chatgpt
+
+        # update the state with post-fetch information
+        post_fetch_info_dict = {
+            'chatgpt_query': chatgpt_query,
+            'chatgpt_response': chatgpt_response,
+            'response_usage_dict': response_usage_dict,
+            'internal_thoughts': internal_thoughts,
+            'response_string': response_string,
+            'apply_post_fetch_from_memory': apply_post_fetch_from_memory,
+            'retrieved_past_memories': retrieved_past_memories[0]['content'],
+        }
+
+    else:
+        print('post fetch was not applied')
+        post_fetch_info_dict = {
+            'chatgpt_query': 'post fetch was not applied',
+            'chatgpt_response': 'post fetch was not applied',
+            'response_usage_dict': 'post fetch was not applied',
+            'internal_thoughts': 'post fetch was not applied',
+            'response_string': 'post fetch was not applied',
+            'apply_post_fetch_from_memory': 'post fetch was not applied',
+            'retrieved_past_memories': 'post fetch was not applied',
+        }
+
+    state['post_fetch_history_list'].append(post_fetch_info_dict)
+
+    # update the conversation history
+    response_message = prompt_utils.wrap_prompt(response_string, role='assistant')
+    curr_conversation_history = curr_conversation_history + user_prompt + response_message
+    state['curr_conversation_history'] = curr_conversation_history
+
+    # what will be displayed in the chatbox
+    chat_messages = []
+    for i in range(0, len(curr_conversation_history) - 1, 2):
+        chat_messages.append((curr_conversation_history[i]['content'], curr_conversation_history[i + 1]['content']))
+
+    return gr.update(value=''), chat_messages, get_tokens_status_message(state), state
+
+
+# define the css of the layout of the app (refers to "elem_id"s of the various elements)
+css = """
+    #chatbox-column {max-width: 70%; margin-left: auto; margin-right: auto;}
+    #buttons-column {max-width: 28%; margin-left: auto; margin-right: auto;}
+    #chatbox {min-height: 80%;}
+    #system_prompt_box {max-height: 65%;}
+    #internal_thoughs_box {max-height: 25%;}
+    #feched_remote_memory_box {max-height: 90%;}
+    #recent_history_context_box {max-height: 90%;}
+    #tokens_status_message {text-align: left; font-size: 0.85em; color: #666;}
+    #pre-fetch {max-width: 64%; margin-left: auto; margin-right: auto;}
+    #post-fetch {max-width: 34%; margin-left: auto; margin-right: auto;}
+    #pre-fetch_slider {max-width: 64%; margin-left: auto; margin-right: auto;}
+    #post-fetch_slider {max-width: 34%; margin-left: auto; margin-right: auto;}
+    #store_memory_button {background-color: blue; color: white; text-align: center;}
+    #clear_conversation_button {background-color: red, color: white; text-align: center;}
+"""
+
+
+# the gradio app
+with gr.Blocks(css=css) as app:
+
+    # initialize the state
+    state = gr.State(get_empty_state_dict())
+
+    # define the layout of the app (left tab - main chatbot)
+    with gr.Tab(label = "Chatbot Main Tab"):
+        with gr.Row():
+            with gr.Column(elem_id="chatbox-column"):
+                chatbot = gr.Chatbot(elem_id="chatbox")
+                input_message = gr.Textbox(show_label=False, placeholder="Enter text and press enter", visible=True).style(container=False)
+            with gr.Column(elem_id="buttons-column"):
+                store_memory_button = gr.Button("Save current conversation in Memory", elem_id="store_memory_button")
+                clear_conversation_button = gr.Button("Clear and start new conversation", elem_id="clear_conversation_button")
+                tokens_status_message = gr.Markdown(elem_id="tokens_status_message")
+
+    # define the layout of the app (right tab - chatbot's "brain")
+    with gr.Tab(label = 'Peak inside chatbot\'s "brain"'):
+        with gr.Row():
+            with gr.Column(elem_id="pre-fetch_slider"):
+                pre_fetch_slider = gr.Slider(minimum=-10, maximum=-1, value=-1, step=1, label="Pre-fetch message index")
+            with gr.Column(elem_id="post-fetch_slider"):
+                post_fetch_slider = gr.Slider(minimum=-10, maximum=-1, value=-1, step=1, label="Post-fetch message index")
+
+        with gr.Row():
+            with gr.Column(elem_id="pre-fetch"):
+                pre_fetch_memory_box = gr.Textbox(elem_id="pre_fetch_memory_box", lines=10, label='pre_fetch_memory_box')
+                pre_fetch_internal_thoughs_box = gr.Textbox(elem_id="pre_fetch_internal_thoughs_box", lines=4, label='pre_fetch_internal_thoughs_box')
+                pre_fetch_response_box = gr.Textbox(elem_id="pre_fetch_response_box", lines=4, label='pre_fetch_response_box')
+                pre_fetch_usage_box = gr.Textbox(elem_id="pre_fetch_usage_box", lines=1, label='pre_fetch_usage_box')
+            with gr.Column(elem_id="post-fetch"):
+                post_fetch_memory_box = gr.Textbox(elem_id="post_fetch_memory_box", lines=10, label='post_fetch_memory_box')
+                post_fetch_internal_thoughs_box = gr.Textbox(elem_id="post_fetch_internal_thoughs_box", lines=4, label='post_fetch_internal_thoughs_box')
+                post_fetch_response_box = gr.Textbox(elem_id="post_fetch_response_box", lines=4, label='post_fetch_response_box')
+                post_fetch_usage_box = gr.Textbox(elem_id="post_fetch_usage_box", lines=1, label='post_fetch_usage_box')
+
+    # define the app's actions
+    input_message.submit(submit_message, inputs=[input_message, state], outputs=[input_message, chatbot, tokens_status_message, state])
+    store_memory_button.click(store_memory, inputs=[state], outputs=[])
+    clear_conversation_button.click(restart_conversation_from_scratch, [], [input_message, chatbot, tokens_status_message, state])
+    pre_fetch_slider.change(update_pre_fetch_message, inputs=[pre_fetch_slider, state], 
+                            outputs=[pre_fetch_memory_box, pre_fetch_internal_thoughs_box, pre_fetch_response_box, pre_fetch_usage_box])
+    post_fetch_slider.change(update_post_fetch_message, inputs=[post_fetch_slider, state], 
+                             outputs=[post_fetch_memory_box, post_fetch_internal_thoughs_box, post_fetch_response_box, post_fetch_usage_box])
+
+
+app.launch()
+
+
+================================================================================
