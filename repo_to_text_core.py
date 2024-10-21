@@ -429,7 +429,7 @@ def process_github_repo(repo_url, output_dir, download_dir='temp_repo_folder', d
     # Process remaining files
     random.shuffle(all_files)
     for file_path in all_files:
-        if is_text_file(file_path):
+        if is_text_file(file_path) and not is_csv_file(file_path):
             content = read_file_contents(file_path)
         elif describe_images and is_image_file(file_path):
             content = analyze_image_with_retries(file_path, gemini_model)
